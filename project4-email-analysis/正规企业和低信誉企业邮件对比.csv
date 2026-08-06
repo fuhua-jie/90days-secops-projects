@@ -1,0 +1,12 @@
+﻿列1,列2,列3,列4
+对比维度,招商银行账单（正规企业）,真游网推广（低信誉）,安全运营判断依据
+**SPF**,✅ `pass`,❌ `none`,发件IP是否被域名授权
+**DKIM**,✅ `pass`,❌ `none`,邮件内容是否被篡改
+**DMARC**,✅ `pass`,❌ `none(permerror)`,域名对齐和策略执行
+**Received 跳数**,1跳（官方直连）,2跳（Windows服务器→中继）,跳数越少，中间环节越少
+**发件主机名**,`mailm1sh.message.cmbchina.com`,`WIN-3PFOG08TVDK`,默认Windows名=非专业
+**发件系统**,企业级邮件网关,Microsoft SMTPSVC,专业vs业余
+**Message-ID**,`JavaMail.cmbchina@...`,`VM-WEB07RXf2LTrpwAC00013f90@VM-WEB07`,企业命名vs虚拟机名
+**链接域名**,全部 `cmbchina.com` 子域,全部 `zygames.com` 子域,域名一致性
+**追踪像素**,有（账单统计）,有（EDM统计）,两者都有，不是判断依据
+**综合风险**,🟢 极低,🟡 中低（内容无害但基础设施薄弱）,
