@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>游戏中心 · SecOps Academy</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="container topbar-in">
+    <a class="logo" href="index.html"><span class="shield">🛡️</span><span>SecOps<em>Academy</em></span></a>
+    <nav class="nav">
+      <a href="index.html">首页</a>
+      <a href="learn.html">学习</a>
+      <a href="games.html">游戏</a>
+      <a href="quiz.html">题库</a>
+      <a href="cases.html">案例</a>
+      <a href="glossary.html">术语</a>
+    </nav>
+    <a class="xp-pill" href="#" id="xpPill">
+      <span class="lvl-num" data-level-num>1</span>
+      <span class="xp-info"><b data-level-title>实习监控员</b><span class="bar"><i data-xp-bar style="width:0%"></i></span></span>
+      <span class="xp-num" data-xp-text>0 XP</span>
+    </a>
+  </div>
+</header>
+
+<section class="section" style="padding-top:40px">
+  <div class="container">
+    <div class="section-head" style="margin-bottom:30px">
+      <span class="eyebrow">ARCADE</span>
+      <h2 class="h2">游戏<span class="grad">中心</span></h2>
+      <p class="section-sub">五个原创小游戏，全部取材真实 SOC 场景。赢了加 XP、破纪录、拿徽章。</p>
+    </div>
+
+    <!-- 游戏选择 -->
+    <div class="game-picker" id="gamePicker"></div>
+
+    <!-- 游戏竞技场 -->
+    <div class="game-arena card" id="arena" style="display:none"></div>
+
+    <div style="text-align:center;margin-top:18px">
+      <button class="btn btn-ghost btn-sm" id="backBtn" style="display:none">← 返回游戏列表</button>
+    </div>
+  </div>
+</section>
+
+<!-- 极速分诊的连击飘字 -->
+<div class="combo" id="comboBox"></div>
+
+<footer class="footer">
+  <div class="container f-bottom" style="border:none;margin-top:0;padding-top:0">
+    <span>🛡️ SecOps Academy · 游戏中心</span><span>最高纪录保存在本地浏览器</span>
+  </div>
+</footer>
+
+<script src="assets/js/data-lessons.js"></script>
+<script src="assets/js/data-games.js"></script>
+<script src="assets/js/progress.js"></script>
+<script src="assets/js/main.js"></script>
+<script src="assets/js/games.js"></script>
+</body>
+</html>

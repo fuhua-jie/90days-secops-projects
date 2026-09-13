@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>术语速查 · SecOps Academy</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="container topbar-in">
+    <a class="logo" href="index.html"><span class="shield">🛡️</span><span>SecOps<em>Academy</em></span></a>
+    <nav class="nav">
+      <a href="index.html">首页</a>
+      <a href="learn.html">学习</a>
+      <a href="games.html">游戏</a>
+      <a href="quiz.html">题库</a>
+      <a href="cases.html">案例</a>
+      <a href="glossary.html">术语</a>
+    </nav>
+    <a class="xp-pill" href="#" id="xpPill">
+      <span class="lvl-num" data-level-num>1</span>
+      <span class="xp-info"><b data-level-title>实习监控员</b><span class="bar"><i data-xp-bar style="width:0%"></i></span></span>
+      <span class="xp-num" data-xp-text>0 XP</span>
+    </a>
+  </div>
+</header>
+
+<section class="section" style="padding-top:40px">
+  <div class="container">
+    <div class="section-head" style="margin-bottom:26px">
+      <span class="eyebrow">GLOSSARY</span>
+      <h2 class="h2">术语<span class="grad">速查</span></h2>
+      <p class="section-sub">安全圈黑话的人话词典。被课程里的词难住了？来这查，30 秒就能看懂。</p>
+    </div>
+
+    <div class="search-row">
+      <input class="search-input" id="termSearch" type="text" placeholder="🔍 搜索术语，如：勒索、EDR、误报…">
+    </div>
+    <div class="filter-row" id="catRow"></div>
+
+    <div class="grid g3" id="termGrid"></div>
+    <div class="empty-state" id="termEmpty" style="display:none">
+      <span class="e-ico">🕵️</span>没找到这个术语——不过你在课程里一定能学到它！
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container f-bottom" style="border:none;margin-top:0;padding-top:0">
+    <span>🛡️ SecOps Academy · 术语速查</span><span id="termCount"></span>
+  </div>
+</footer>
+
+<script src="assets/js/data-glossary.js"></script>
+<script src="assets/js/data-glossary2.js"></script>
+<script src="assets/js/data-glossary3.js"></script>
+<script src="assets/js/progress.js"></script>
+<script src="assets/js/main.js"></script>
+<script src="assets/js/glossary.js"></script>
+</body>
+</html>

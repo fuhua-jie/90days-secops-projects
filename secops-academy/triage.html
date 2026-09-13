@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>告警研判训练场 · SecOps Academy</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚨</text></svg>">
+<link rel="stylesheet" href="assets/css/style.css">
+<style>
+.triage-card{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:rgba(3,7,18,.6);margin-bottom:10px}
+.triage-card .jkey{color:var(--cy);font-family:var(--m);font-size:12px}
+.triage-card .jval{color:var(--li);font-family:var(--m);font-size:12px}
+.score-strip{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.score-strip .tag{font-size:13px}
+.answer-reveal{background:rgba(3,7,18,.7);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:10px 0;font-size:13px;line-height:1.9}
+.answer-reveal b{color:var(--am)}
+.answer-reveal .ok{color:var(--li)}
+.answer-reveal .no{color:var(--ro)}
+.streak-ind{font-size:14px;color:var(--am);font-family:var(--m)}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="container topbar-in">
+    <a class="logo" href="index.html"><span class="shield">🛡️</span><span>SecOps<em>Academy</em></span></a>
+    <nav class="nav">
+      <a href="index.html">首页</a>
+      <a href="learn.html">学习</a>
+      <a href="games.html">游戏</a>
+      <a href="quiz.html">题库</a>
+      <a href="cases.html">案例</a>
+      <a href="glossary.html">术语</a>
+    </nav>
+    <a class="xp-pill" href="#" id="xpPill">
+      <span class="lvl-num" data-level-num>1</span>
+      <span class="xp-info"><b data-level-title>实习监控员</b><span class="bar"><i data-xp-bar style="width:0%"></i></span></span>
+      <span class="xp-num" data-xp-text>0 XP</span>
+    </a>
+  </div>
+</header>
+
+<section class="section" style="padding-top:34px">
+  <div class="container">
+    <div class="section-head" style="margin-bottom:20px;text-align:left">
+      <span class="eyebrow">ALERT TRIAGE TRAINER</span>
+      <h2 class="h2">🚨 告警研判训练场<span class="grad">· 30 秒决策</span></h2>
+      <p class="section-sub">SIEM 风格告警 JSON 随机推送（含干扰项），你按<b>严重级别 → 攻击类型 → 处置动作</b>三步研判。包含误报与白名单陷阱——研判不仅是"找到攻击"，还有"放过正常"。30 秒倒计时。</p>
+    </div>
+
+    <div class="card" style="max-width:720px;margin:0 auto;padding:28px;text-align:center" id="startScreen">
+      <div style="font-size:46px">🚨</div>
+      <h3 style="font-size:20px;font-weight:800;margin:10px 0 4px">告警研判训练场</h3>
+      <p style="color:var(--tx2);font-size:13.5px;max-width:520px;margin:0 auto 14px;line-height:1.9">
+        30 秒内完成研判：看 JSON 告警 → 选严重级别 + 攻击类型 + 处置动作。<br>
+        正确连续 + 连击加成 · 倒计时归零自动提交 · 20 题一轮
+      </p>
+      <button class="btn btn-primary" id="startBtn" style="font-size:16px;padding:13px 36px">🚀 开始训练</button>
+    </div>
+
+    <div id="triageScreen" style="display:none">
+      <div class="card" style="max-width:720px;margin:0 auto;padding:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="streak-ind" id="streakInd"></span>
+            <span style="font-size:12px;color:var(--tx3)">第 <b id="qNum">1</b>/20 题</span>
+          </div>
+          <div style="font-family:var(--m);font-size:20px;font-weight:800;color:var(--am)" id="timer">30s</div>
+        </div>
+
+        <div class="triage-card" id="alertCard"></div>
+
+        <div style="margin:14px 0 6px;font-size:13px;color:var(--tx2);font-weight:700">① 严重级别</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="sevRow">
+          <button class="btn btn-sm triage-opt" data-sev="critical">P1 紧急</button>
+          <button class="btn btn-sm triage-opt" data-sev="high">P2 高</button>
+          <button class="btn btn-sm triage-opt" data-sev="medium">P3 中</button>
+          <button class="btn btn-sm triage-opt" data-sev="low">P4 低</button>
+        </div>
+
+        <div style="margin:10px 0 6px;font-size:13px;color:var(--tx2);font-weight:700">② 攻击类型 / 定性</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="typeRow">
+          <button class="btn btn-sm triage-opt" data-type="暴力破解">暴力破解</button>
+          <button class="btn btn-sm triage-opt" data-type="SQL注入">SQL注入</button>
+          <button class="btn btn-sm triage-opt" data-type="XSS">XSS</button>
+          <button class="btn btn-sm triage-opt" data-type="WebShell">WebShell</button>
+          <button class="btn btn-sm triage-opt" data-type="扫描探测">扫描探测</button>
+          <button class="btn btn-sm triage-opt" data-type="异常外联">异常外联</button>
+          <button class="btn btn-sm triage-opt" data-type="凭据窃取">凭据窃取</button>
+          <button class="btn btn-sm triage-opt" data-type="正常业务">正常业务/误报</button>
+        </div>
+
+        <div style="margin:10px 0 6px;font-size:13px;color:var(--tx2);font-weight:700">③ 处置动作</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px" id="actRow">
+          <button class="btn btn-sm triage-opt" data-act="封禁 IP">封禁 IP</button>
+          <button class="btn btn-sm triage-opt" data-act="隔离主机">隔离主机</button>
+          <button class="btn btn-sm triage-opt" data-act="忽略（白名单/误报）">忽略/放行</button>
+          <button class="btn btn-sm triage-opt" data-act="升级 Tier2">升级 Tier2</button>
+        </div>
+
+        <div id="feedback"></div>
+        <button class="btn btn-primary" id="nextBtn" style="display:none;width:100%;margin-top:12px">下一题 →</button>
+      </div>
+    </div>
+
+    <div id="resultScreen" style="display:none">
+      <div class="card" style="max-width:600px;margin:0 auto;padding:30px;text-align:center">
+        <div style="font-size:46px" id="resultIco"></div>
+        <h3 id="resultTitle" style="font-size:22px;font-weight:800;margin:8px 0"></h3>
+        <div id="resultStats" style="margin:12px 0;font-size:14px;color:var(--tx2)"></div>
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:14px 0">
+          <button class="btn btn-primary" onclick="location.reload()">再来一轮</button>
+          <a class="btn btn-ghost" href="index.html">返回首页</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container f-bottom" style="border:none;margin-top:0;padding-top:0">
+    <span>🚨 SecOps Academy · 告警研判训练场</span><span>告警与误报均为教学模拟数据</span>
+  </div>
+</footer>
+
+<script>
+/* ---------- 告警场景库（20+ 场景，含干扰项） ---------- */
+const SCENARIOS = [
+  { json:{timestamp:"2026-07-18T02:13:01Z",source_ip:"45.83.66.23",target:"10.1.1.5:22",event:"SSH login failed",detail:"Failed password for root ×156 in 5min",count:156}, sev:"high", type:"暴力破解", act:"封禁 IP", ans:"同源 5 分钟内 156 次 SSH 失败——爆破特征明确，先封源再看是否有成功登录。", false_:"" },
+  { json:{timestamp:"2026-07-18T10:00:05Z",source_ip:"10.0.0.99",target:"10.1.1.5:80",event:"HTTP 404",detail:"GET /backup.zip → 404",count:3}, sev:"low", type:"扫描探测", act:"忽略（白名单/误报）", ans:"3 次 404 远低于基线，且来源是已知合作方扫描器 10.0.0.99——白名单放行。", false_:"10.0.0.99 在裁判公告的合作方白名单里。" },
+  { json:{timestamp:"2026-07-18T03:12:00Z",source_ip:"45.83.66.23",target:"10.1.2.33:80",event:"HTTP 200",detail:"POST /product.php?id=1' UNION SELECT 1,database()-- → 200",count:1}, sev:"high", type:"SQL注入", act:"封禁 IP", ans:"注入 Payload 返回 200 = 数据可能已泄露——立即封源并检查数据库审计日志。", false_:"" },
+  { json:{timestamp:"2026-07-18T14:00:00Z",source_ip:"10.0.0.99",target:"10.1.1.5:443",event:"Nessus Scan",detail:"安全部月度漏扫（Nessus 模板已审批）",count:200}, sev:"low", type:"正常业务", act:"忽略（白名单/误报）", ans:"安全部月度漏扫有变更单审批——扫描行为是已知的安全活动，不是攻击。", false_:"有审批单的扫描不算攻击。" },
+  { json:{timestamp:"2026-07-18T03:00:00Z",source_ip:"10.1.1.66",target:"45.83.66.23:443",event:"Outbound HTTPS",detail:"服务器主动外联境外 IP（非常规目的）",count:1}, sev:"high", type:"异常外联", act:"隔离主机", ans:"服务器主动连境外高危 IP = 可能已被入侵（C2 回连）——隔离主机保留证据。", false_:"" },
+  { json:{timestamp:"2026-07-18T09:00:00Z",source_ip:"10.1.1.50",target:"10.1.1.5:80",event:"HTTP 200",detail:"GET /index.html 200",count:1}, sev:"low", type:"正常业务", act:"忽略（白名单/误报）", ans:"正常的内部用户访问内网 Web——单条 200 无异常。", false_:"" },
+  { json:{timestamp:"2026-07-18T04:00:00Z",source_ip:"10.1.2.33",target:"45.83.66.23:4444",event:"Outbound TCP",detail:"ESTABLISHED to 4444（Metasploit 默认端口）",count:1}, sev:"critical", type:"异常外联", act:"隔离主机", ans:"4444 是 Metasploit 默认端口——服务器 4444 出站=几乎确认被攻陷。立即隔离！同时记录 PID 和进程路径。", false_:"" },
+  { json:{timestamp:"2026-07-18T08:00:00Z",source_ip:"45.83.66.99",target:"10.1.1.5:80",event:"HTTP 404",detail:"GET /admin /wp-login /.env /backup.zip → 全 404 ×80 in 3min",count:80}, sev:"medium", type:"扫描探测", act:"封禁 IP", ans:"3 分钟 80 次 404 且路径为敏感文件——目录扫描明确。封源+检查是否扫到过。", false_:"" },
+  { json:{timestamp:"2026-07-18T22:00:00Z",source_ip:"10.1.1.5",target:"0.0.0.0:3389",event:"RDP Listening",detail:"RDP 服务开启且面向公网",count:1}, sev:"medium", type:"扫描探测", act:"升级 Tier2", ans:"RDP 面向公网 = 攻击面暴露（爆破目标）——需要收敛暴露面，属于配置问题升级处理。", false_:"" },
+  { json:{timestamp:"2026-07-18T15:00:00Z",source_ip:"45.83.66.23",target:"10.1.1.5:80",event:"HTTP 200",detail:"GET /search?q=<img src=x onerror=alert(document.cookie)> → 200",count:1}, sev:"high", type:"XSS", act:"封禁 IP", ans:"XSS Payload 返回 200 且包含 Cookie 外带逻辑——反射成功。封源并确认是否有受害者。", false_:"" },
+  { json:{timestamp:"2026-07-18T02:00:00Z",source_ip:"10.1.1.20",target:"10.1.1.5:1433",event:"MSSQL Connection",detail:"DBA 账号从应用服务器连接数据库（正常业务时段）",count:1}, sev:"low", type:"正常业务", act:"忽略（白名单/误报）", ans:"应用服务器连数据库是正常业务——DBA 账号在业务时段的连接是常规。", false_:"" },
+  { json:{timestamp:"2026-07-18T04:30:00Z",source_ip:"10.1.2.33",target:"10.1.2.40:445",event:"SMB Connection",detail:"psexec 风格：服务安装 + IPC$ 连接",count:3}, sev:"critical", type:"异常外联", act:"隔离主机", ans:"SMB + 服务安装 + IPC$ = psexec 横向移动——源主机大概率已失陷，立即隔离。", false_:"" },
+  { json:{timestamp:"2026-07-18T10:00:00Z",source_ip:"172.16.0.8",target:"10.1.1.5:80",event:"HTTP 200",detail:"GET /product.php?id=1 AND 1=1 → 200",count:1}, sev:"medium", type:"SQL注入", act:"封禁 IP", ans:"AND 1=1 是布尔盲注的探测请求——虽然是单条，但特征明确。封源并关注后续是否有 SLEEP。", false_:"" },
+  { json:{timestamp:"2026-07-18T16:00:00Z",source_ip:"10.1.1.5",target:"169.254.169.254",event:"Metadata Access",detail:"服务器访问云元数据接口",count:5}, sev:"critical", type:"异常外联", act:"升级 Tier2", ans:"服务器访问 169.254.169.254 = 可能存在 SSRF 读取云凭据——高度可疑，需要确认是否有 SSRF 漏洞。", false_:"" },
+  { json:{timestamp:"2026-07-18T11:00:00Z",source_ip:"45.83.66.23",target:"10.1.1.5:80",event:"HTTP 200",detail:"POST /upload/shell.php?pass=whoami → 200",count:1}, sev:"critical", type:"WebShell", act:"隔离主机", ans:"Webshell 访问且返回 200 = 已经在执行命令！立即隔离主机（Web 服务器）并清除 shell。", false_:"" },
+  { json:{timestamp:"2026-07-18T12:00:00Z",source_ip:"10.1.1.5",target:"10.1.1.1:53",event:"DNS Query",detail:"标准 DNS 查询 www.baidu.com",count:1}, sev:"low", type:"正常业务", act:"忽略（白名单/误报）", ans:"正常 DNS 查询。", false_:"" },
+  { json:{timestamp:"2026-07-18T06:00:00Z",source_ip:"45.83.66.99",target:"10.1.1.5:443",event:"TLS Handshake",detail:"TLS 连接但 SNI 为空（无 SNI 扩展）",count:3}, sev:"high", type:"异常外联", act:"封禁 IP", ans:"空 SNI 的 TLS 连接 = 攻击者隐藏域名（C2 常用手段）。封源并排查哪些主机连过它。", false_:"" },
+  { json:{timestamp:"2026-07-18T05:00:00Z",source_ip:"45.83.66.23",target:"10.1.2.5:22",event:"SSH Brute Force",detail:"SSH login failed ×200 in 10min (user: admin/root/test)",count:200}, sev:"high", type:"暴力破解", act:"封禁 IP", ans:"200 次 SSH 失败且尝试多账号 = 暴力破解。封源并检查是否有成功登录。", false_:"" },
+  { json:{timestamp:"2026-07-18T18:00:00Z",source_ip:"10.1.1.5",target:"45.83.66.23:53",event:"DNS Query",detail:"TXT aXNvY2Quc2VjcmV0LnJlYWN0ZS0x.data-t.evil-cdn.net",count:20}, sev:"high", type:"异常外联", act:"隔离主机", ans:"TXT 查询子域名编码数据 + 高频 = DNS 隧道数据外传。隔离主机并封禁 evil-cdn.net。", false_:"" },
+  { json:{timestamp:"2026-07-18T20:00:00Z",source_ip:"10.1.1.5",target:"10.1.1.5:80",event:"HTTP Self-Access",detail:"服务器访问自己的 80 端口（健康检查）",count:1}, sev:"low", type:"正常业务", act:"忽略（白名单/误报）", ans:"自访问健康检查是正常的负载均衡行为。", false_:"" },
+];
+
+/* ---------- 游戏逻辑 ---------- */
+const $ = s => document.querySelector(s);
+let timer = null, timeLeft = 30, answers = {sev:'',type:'',act:''}, results = [], qIdx = 0, streak = 0, order = [];
+
+function shuffle(a) { for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
+
+$('#startBtn').onclick = function() {
+  $('#startScreen').style.display = 'none';
+  $('#triageScreen').style.display = '';
+  order = shuffle([...SCENARIOS.keys()]).slice(0, 20);
+  qIdx = 0; results = []; streak = 0;
+  nextQ();
+};
+
+function nextQ() {
+  answers = {sev:'',type:'',act:''};
+  $('#feedback').innerHTML = '';
+  $('#nextBtn').style.display = 'none';
+  document.querySelectorAll('.triage-opt').forEach(b => { b.disabled = false; b.style.borderColor = ''; b.style.background = ''; });
+  if (qIdx >= order.length) return endGame();
+  const idx = order[qIdx], sc = SCENARIOS[idx];
+  $('#qNum').textContent = qIdx + 1;
+  $('#streakInd').textContent = streak >= 3 ? `🔥 连击 ×${streak}` : '';
+  const j = JSON.stringify(sc.json, null, 2);
+  $('#alertCard').innerHTML = `<pre style="font-family:var(--m);font-size:12px;line-height:1.8;color:var(--li);margin:0;white-space:pre-wrap;word-break:break-word">${j.replace(/</g,'&lt;')}</pre>`;
+  timeLeft = 30;
+  $('#timer').textContent = timeLeft + 's';
+  clearInterval(timer);
+  timer = setInterval(() => {
+    timeLeft--;
+    $('#timer').textContent = timeLeft + 's';
+    if (timeLeft <= 0) { clearInterval(timer); submit(true); }
+  }, 1000);
+}
+
+function submit(timeout) {
+  clearInterval(timer);
+  document.querySelectorAll('.triage-opt').forEach(b => b.disabled = true);
+  const sc = SCENARIOS[order[qIdx]];
+  let correct = 0, total = 3;
+  if (timeout || !answers.sev) { correct = 0; }
+  else {
+    if (answers.sev === sc.sev) correct++;
+    if (answers.type === sc.type) correct++;
+    if (answers.act === sc.act) correct++;
+  }
+  if (correct === 3) { streak++; } else { streak = 0; }
+  results.push({ correct, total, timeout: !!timeout });
+  const score = correct * 10 + (streak >= 3 ? 20 : 0);
+  const okHtml = c => `<span class="${c ? 'ok' : 'no'}">${c ? '✓' : '✗'}</span>`;
+  let fb = `<div class="score-strip">
+    <span class="tag ${correct===3?'cy':'ro'}">得分：${correct}/3 ${streak>=3?'🔥':''}</span>
+    <span class="tag">级别 ${okHtml(answers.sev===sc.sev)}</span>
+    <span class="tag">类型 ${okHtml(answers.type===sc.type)}</span>
+    <span class="tag">处置 ${okHtml(answers.act===sc.act)}</span>
+  </div>`;
+  fb += `<div class="answer-reveal"><b>正确答案</b>：级别 <span class="ok">${sc.sev}</span> · 类型 <span class="ok">${sc.type}</span> · 处置 <span class="ok">${sc.act}</span><br>💡 ${sc.ans}${sc.false_ ? '<br>⚠️ 误报陷阱：' + sc.false_ : ''}</div>`;
+  $('#feedback').innerHTML = fb;
+  $('#nextBtn').style.display = '';
+  qIdx++;
+}
+
+document.querySelectorAll('#sevRow .triage-opt').forEach(b => b.onclick = () => { answers.sev = b.dataset.sev; trySubmit(); });
+document.querySelectorAll('#typeRow .triage-opt').forEach(b => b.onclick = () => { answers.type = b.dataset.type; trySubmit(); });
+document.querySelectorAll('#actRow .triage-opt').forEach(b => b.onclick = () => { answers.act = b.dataset.act; trySubmit(); });
+
+function trySubmit() {
+  if (answers.sev && answers.type && answers.act) submit(false);
+}
+
+$('#nextBtn').onclick = function() { nextQ(); };
+
+function endGame() {
+  clearInterval(timer);
+  $('#triageScreen').style.display = 'none';
+  $('#resultScreen').style.display = '';
+  const full = results.filter(r => r.correct === 3).length;
+  const timeouts = results.filter(r => r.timeout).length;
+  const avg = results.length ? Math.round(results.reduce((s,r) => s + r.correct, 0) / (results.length * 3) * 100) : 0;
+  $('#resultIco').textContent = full >= 15 ? '🏆' : full >= 10 ? '🥈' : '🎖️';
+  $('#resultTitle').textContent = full >= 15 ? '研判大师' : full >= 10 ? '合格分析师' : '需要加练';
+  $('#resultStats').innerHTML = `20 题 · 全对 ${full} · 超时 ${timeouts} · 准确率 ${avg}%<br>连击最高：${Math.max(...results.map(r => 0)) || 0}`;
+  if (window.App && App.toast) App.toast(`训练完成：全对 ${full}/20`, '🚨');
+}
+</script>
+</body>
+</html>

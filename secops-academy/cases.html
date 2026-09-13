@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>案例复盘室 · SecOps Academy</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="container topbar-in">
+    <a class="logo" href="index.html"><span class="shield">🛡️</span><span>SecOps<em>Academy</em></span></a>
+    <nav class="nav">
+      <a href="index.html">首页</a>
+      <a href="learn.html">学习</a>
+      <a href="games.html">游戏</a>
+      <a href="quiz.html">题库</a>
+      <a href="cases.html">案例</a>
+      <a href="glossary.html">术语</a>
+    </nav>
+    <a class="xp-pill" href="#" id="xpPill">
+      <span class="lvl-num" data-level-num>1</span>
+      <span class="xp-info"><b data-level-title>实习监控员</b><span class="bar"><i data-xp-bar style="width:0%"></i></span></span>
+      <span class="xp-num" data-xp-text>0 XP</span>
+    </a>
+  </div>
+</header>
+
+<section class="section" style="padding-top:40px">
+  <div class="container">
+    <div class="section-head" style="margin-bottom:30px">
+      <span class="eyebrow">CASE FILES</span>
+      <h2 class="h2">案例<span class="grad">复盘室</span></h2>
+      <p class="section-sub">四个改编自真实事件模式的故事。读时间线、做关键抉择、领整改清单——每答对一次抉择 +8 XP。</p>
+    </div>
+    <div id="caseHome"></div>
+    <div id="caseReader" style="display:none"></div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container f-bottom" style="border:none;margin-top:0;padding-top:0">
+    <span>🛡️ SecOps Academy · 案例复盘室</span><span>内容基于公开事件模式改编，仅用于安全教育</span>
+  </div>
+</footer>
+
+<script src="assets/js/data-cases.js"></script>
+<script src="assets/js/data-cases2.js"></script>
+<script src="assets/js/progress.js"></script>
+<script src="assets/js/main.js"></script>
+<script src="assets/js/cases.js"></script>
+</body>
+</html>

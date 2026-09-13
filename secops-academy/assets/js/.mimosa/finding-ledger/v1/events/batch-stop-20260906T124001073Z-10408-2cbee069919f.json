@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-20260906T124001073Z-10408-2cbee069919f",
+  "runId": "20260906T124001073Z-10408-2cbee069919f",
+  "runStatus": "completed",
+  "coverage": {
+    "status": "complete",
+    "reasons": []
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "Stop"
+  },
+  "revision": null,
+  "diffHash": "9380c2703b3e1dc89ced1f9f409e4eeb13f53c4fbd950d74a230c4e69bf3315b",
+  "rulesVersion": "unavailable",
+  "sessionHash": "622025093b2b081519ea1544fe10181f62a8e1cb1d8862cc2e9b1cbb78638ef8",
+  "reportRef": ".mimosa/reports/task-review-sess_e1ad42bf-f2ce-4f99-a342-0e81425229da-20260906T124001073Z-10408-2cbee069919f.json",
+  "events": [],
+  "observedFindingIds": [
+    "mimosa-5399547c2b5a4ddddef5a347",
+    "mimosa-38886b6345d913cd03c9c32f"
+  ],
+  "verifiedFiles": [
+    {
+      "file": "lab.js",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "games.js",
+      "direct": "complete",
+      "projectContext": "partial"
+    }
+  ],
+  "recordedAt": "2026-09-06T12:40:01.777Z"
+}

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "mimosa-hook-status/v1",
+  "recordedAt": "2026-09-08T13:20:01.913Z",
+  "sessionId": "sess_e1ad42bf-f2ce-4f99-a342-0e81425229da",
+  "event": "PostToolUse",
+  "toolName": "Edit",
+  "file": "F:\\ZCode-Work\\secops-academy\\ctf.html",
+  "outcome": "clear",
+  "coverage": "complete",
+  "findingCount": 0,
+  "durationMs": 4,
+  "hostState": "hook_complete",
+  "reportHint": ".mimosa/reports/"
+}

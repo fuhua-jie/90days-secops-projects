@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>日志侦探 · 取证终端 · SecOps Academy</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔍</text></svg>">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="container topbar-in">
+    <a class="logo" href="index.html"><span class="shield">🛡️</span><span>SecOps<em>Academy</em></span></a>
+    <nav class="nav">
+      <a href="index.html">首页</a>
+      <a href="learn.html">学习</a>
+      <a href="games.html">游戏</a>
+      <a href="quiz.html">题库</a>
+      <a href="cases.html">案例</a>
+      <a href="glossary.html">术语</a>
+    </nav>
+    <a class="xp-pill" href="#" id="xpPill">
+      <span class="lvl-num" data-level-num>1</span>
+      <span class="xp-info"><b data-level-title>实习监控员</b><span class="bar"><i data-xp-bar style="width:0%"></i></span></span>
+      <span class="xp-num" data-xp-text>0 XP</span>
+    </a>
+  </div>
+</header>
+
+<section class="section" style="padding-top:34px">
+  <div class="container">
+    <div class="section-head" style="margin-bottom:22px;text-align:left">
+      <span class="eyebrow">LOG DETECTIVE · FORENSIC CONSOLE</span>
+      <h2 class="h2">🔍 日志侦探<span class="grad">· 取证终端</span></h2>
+      <p class="section-sub">真实职场工作流：没人告诉你日志在哪。用 find/ls 定位日志文件 → 用三剑客（grep/awk/sed）和管道筛查 → check 提交结论。14 大日志类别 × 每类 3 案 = 42 案，星级自选。</p>
+    </div>
+
+    <div class="lab-layout">
+      <div class="terminal lab-term">
+        <div class="term-head">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="term-title">detective@sec-lab: ~ — 日志取证终端</span>
+          <button class="btn btn-sm btn-ghost" id="labReset" style="margin-left:auto;padding:4px 12px;font-size:12px">重做本案</button>
+        </div>
+        <div class="term-body" id="termBody"></div>
+      </div>
+
+      <aside class="lab-side">
+        <div class="card task-card">
+          <h4>🎯 当前案情</h4>
+          <div class="t-obj" id="curCase">加载中…</div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn btn-sm btn-ghost" id="randomBtn" style="flex:1">🔀 随机一案</button>
+            <button class="btn btn-sm btn-ghost" id="pickerBtn" style="flex:1">📂 案情题库</button>
+          </div>
+          <button class="btn btn-sm btn-ghost" id="hintBtn" style="margin-top:8px;width:100%">💡 给个提示</button>
+        </div>
+        <div class="card">
+          <h4 style="font-size:14px;font-weight:800;margin-bottom:10px">📋 取证清单</h4>
+          <div class="task-checklist" id="taskChecklist"></div>
+        </div>
+        <div class="lab-banner" id="labBanner">
+          建议 workflow：<br>
+          ① find / -name "*.log" 定位日志<br>
+          ② grep/awk/sed + 管道筛查<br>
+          ③ check 答案 推进案情
+        </div>
+      </aside>
+    </div>
+
+    <p style="color:var(--tx3);font-size:12.5px;margin-top:14px;font-family:var(--m)">
+      支持 <b style="color:var(--cy)">find / ls / cat / grep / awk / sed / head / tail / wc / sort / uniq</b> 与管道 |、分号 ; 组合。每次打开随机一案；点「📂 案情题库」按类别/星级自选。
+    </p>
+  </div>
+</section>
+
+<!-- 案情选择器 -->
+<div class="modal-mask" id="pickerMask">
+  <div class="modal" style="max-width:880px">
+    <div class="modal-head">
+      <div><h3>📂 日志案情题库 <span id="pickCount" style="font-size:13px;color:var(--tx3)"></span></h3><div class="m-sub">14 大日志类别 × 各 3 案 = 42 案 · 星级 = 综合难度</div></div>
+      <button class="modal-close" id="pickerClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="filter-row" id="pickerCats"></div>
+      <div class="filter-row" id="pickerDiffs"></div>
+      <div class="grid g3" id="pickerGrid" style="gap:10px"></div>
+    </div>
+  </div>
+</div>
+
+<footer class="footer">
+  <div class="container f-bottom" style="border:none;margin-top:0;padding-top:0">
+    <span>🔍 SecOps Academy · 日志侦探取证终端</span><span>日志均为教学模拟数据</span>
+  </div>
+</footer>
+
+<script src="assets/js/progress.js"></script>
+<script src="assets/js/main.js"></script>
+<script src="assets/js/diff.js"></script>
+<script src="assets/js/det_cases.js"></script>
+<script src="assets/js/detective.js"></script>
+</body>
+</html>

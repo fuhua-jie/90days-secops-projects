@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>模拟面试官 · 安全运营 · SecOps Academy</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎤</text></svg>">
+<link rel="stylesheet" href="assets/css/style.css">
+<style>
+.round-tab{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;cursor:pointer;border:1px solid transparent;color:var(--tx2);transition:.2s;font-size:13.5px;font-weight:600}
+.round-tab.active{background:var(--card2);border-color:rgba(34,211,238,.4);color:var(--tx)}
+.round-tab .r-ico{font-size:18px}
+.round-tab .r-done{margin-left:auto;font-size:11px;color:var(--li)}
+.q-block{border:1px solid var(--line);border-radius:12px;padding:16px 18px;background:rgba(3,7,18,.55);margin-bottom:14px}
+.q-block .q-t{font-size:14px;font-weight:700;color:var(--tx);margin-bottom:8px}
+.q-block textarea{width:100%;min-height:100px;background:rgba(3,7,18,.6);border:1px solid var(--line);border-radius:8px;color:var(--tx);font-size:13px;padding:10px 12px;resize:vertical;font-family:var(--f);line-height:1.8}
+.q-block textarea:focus{outline:none;border-color:var(--cy)}
+.q-block .reveal-btn{margin-top:8px;padding:5px 14px;font-size:12px}
+.q-block .model-answer{display:none;margin-top:10px;background:rgba(3,7,18,.7);border:1px solid rgba(34,211,238,.3);border-radius:8px;padding:12px 14px;font-size:13px;line-height:1.9;color:var(--tx2)}
+.q-block .model-answer.show{display:block}
+.q-block .model-answer b{color:var(--cy)}
+.q-block .key-points{margin-top:10px;padding:10px 12px;background:rgba(163,230,53,.08);border:1px solid rgba(163,230,53,.3);border-radius:8px;font-size:12.5px}
+.q-block .key-points li{margin-bottom:4px}
+.interview-layout{display:grid;grid-template-columns:230px 1fr;gap:20px;align-items:start}
+@media(max-width:900px){.interview-layout{grid-template-columns:1fr}.round-tabs{display:flex;flex-wrap:wrap;gap:6px}.round-tab{flex:0 0 auto;max-width:48vw}}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="container topbar-in">
+    <a class="logo" href="index.html"><span class="shield">🛡️</span><span>SecOps<em>Academy</em></span></a>
+    <nav class="nav">
+      <a href="index.html">首页</a>
+      <a href="learn.html">学习</a>
+      <a href="games.html">游戏</a>
+      <a href="quiz.html">题库</a>
+      <a href="cases.html">案例</a>
+      <a href="glossary.html">术语</a>
+    </nav>
+    <a class="xp-pill" href="#" id="xpPill">
+      <span class="lvl-num" data-level-num>1</span>
+      <span class="xp-info"><b data-level-title>实习监控员</b><span class="bar"><i data-xp-bar style="width:0%"></i></span></span>
+      <span class="xp-num" data-xp-text>0 XP</span>
+    </a>
+  </div>
+</header>
+
+<section class="section" style="padding-top:34px">
+  <div class="container">
+    <div class="section-head" style="margin-bottom:20px;text-align:left">
+      <span class="eyebrow">MOCK INTERVIEW · 安全运营面试</span>
+      <h2 class="h2">🎤 模拟面试官<span class="grad">· 五轮拷打</span></h2>
+      <p class="section-sub">五轮结构化面试：自我介绍 → 技术深挖 → 项目盘问 → 场景应变 → HR 压力。每题先自己答，再对照参考答案查漏补缺。全程独立完成。</p>
+    </div>
+
+    <div class="interview-layout">
+      <aside class="round-tabs" id="roundTabs" style="display:flex;flex-direction:column;gap:8px;position:sticky;top:82px"></aside>
+      <div id="roundContent"></div>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container f-bottom" style="border:none;margin-top:0;padding-top:0">
+    <span>🎤 SecOps Academy · 模拟面试官</span><span>先自己答，再看参考——面试不是背答案，是证明思路</span>
+  </div>
+</footer>
+
+<script>
+const ROUNDS = [
+{ id:'intro', ico:'🙋', name:'第一轮 · 自我介绍', questions:[
+  { q:'请做 1 分钟自我介绍（零基础转型方向）',
+    model:`<b>结构</b>：转型动机（1句）→ 学了什么（2句）→ 产出了什么（2句）→ 性格匹配（1句）`,
+    answer:`面试官好，我是零基础转型安全运营。92 天系统学习了 Linux 日志分析、网络协议、OWASP 漏洞原理、ELK 平台搭建和 Python 自动化。产出了三个项目：基于 Docker 部署的 ELK 日志分析平台、带 AI 研判的日志异常检测系统（检测率 XX%）、以及 19 类 DVWA 漏洞的复现与防御分析报告。我做事有条理、爱记录，卡住的问题不解决不睡觉——这个特质在值班盯告警时特别有用。`,
+    keys:['转型动机真诚','有具体学习路径','提到量化产出（检测率/课数/截图数）','性格与岗位匹配','不超过 1.5 分钟'] },
+  { q:'你为什么选择转行做安全运营？',
+    model:`<b>结构</b>：触发事件（真实原因）→ 为什么选安全（不是逃离而是选择）→ 为什么是运营（不是渗透）`,
+    answer:`我之前在做（原行业），一次（数据泄露/勒索/钓鱼事件）让我意识到安全的重要性，开始自学后发现安全运营不是"黑客攻防"而是"持续运行的体系"——监控、检测、响应、加固的循环。我选择运营方向是因为我喜欢有秩序的对抗：规则引擎 + 行为分析 + 日志溯源，这比"渗透一次就完"更适合我。`,
+    keys:['有真实触发点（不是"喜欢黑客"）','理解运营 vs 渗透的区别','体现"持续性"特质','不贬低原行业'] },
+  { q:'你觉得自己最大的不足是什么？',
+    model:`<b>结构</b>：真实不足（可改进的）→ 已在做的改进 → 不影响核心工作`,
+    answer:`最大的不足是经验——我没有在生产环境处理过真实的安全事件。但我通过靶场复现、CTF 游戏和模拟场景练习建立了方法论：遇到事件按"隔离→取证→排查→清除→恢复→复盘"走，不会慌。我也在持续学习：每周精读安全资讯、每月深挖一个攻击手法。经验需要时间积累，但方法和态度从第一天就对了。`,
+    keys:['诚实承认（不装完美）','不足是"经验"而非"能力"','已有改进动作','不影响核心胜任力'] },
+]},
+{ id:'tech', ico:'🔧', name:'第二轮 · 技术深挖', questions:[
+  { q:'什么是 SQL 注入？怎么防？',
+    model:`<b>三段答</b>：原理（1句）→ 危害（1句）→ 防御（分层次）`,
+    answer:`SQL 注入是用户输入被拼接进 SQL 语句并当作代码执行的漏洞。比如登录框输入 ' OR '1'='1 可以绕过认证。危害包括拖库、绕权、甚至 RCE。防御分三层：<b>根治</b>是参数化查询/预编译（让用户输入永远当"数据"不当"代码"）；<b>缓解</b>是 WAF 规则拦截注入特征；<b>兜底</b>是数据库最小权限+报错不回显。我亲手在 DVWA 完成了手工注入六步流程（ORDER BY 定字段→UNION 联查→拖库），也用 SQLMap 做过自动化对比。`,
+    keys:['原理一句话说清','防御分三层（根治/缓解/兜底）','提到亲手实践','提到参数化是根治方案'] },
+  { q:'发现服务器被入侵了，你会怎么做？',
+    model:`<b>六步法</b>：隔离→取证→排查→清除→恢复→复盘`,
+    answer:`按应急响应六步法走：<b>①隔离</b>——断网不断电（保住内存证据）；<b>②取证</b>——先拍内存镜像和日志快照，再动手排查；<b>③排查</b>——入口（SSH/Web日志）+ 驻留（cron/systemd/SUID/公钥）；<b>④清除</b>——删除后门、轮换凭据、修补入口漏洞；<b>⑤恢复</b>——从黄金镜像/备份恢复业务；<b>⑥复盘</b>——写时间线报告+整改清单到人。整个过程不重启（丢内存证据）、不急删文件（留样本）。`,
+    keys:['六步完整顺序','"断网不断电"细节','提到内存/日志取证','提到复盘环节','不急删/不急重启'] },
+  { q:'说说 TCP 三次握手和四次挥手。',
+    model:`<b>画图+标注标志位</b>，然后联系安全场景`,
+    answer:`三次握手：客户端发 SYN(seq=x)，服务端回 SYN+ACK(seq=y,ack=x+1)，客户端再发 ACK(ack=y+1)——建立双向通道。四次挥手：主动方 FIN→被动方 ACK→被动方 FIN→主动方 ACK——各方向独立关闭。<b>安全关联</b>：SYN Flood 攻击就是只发 SYN 不回 ACK 耗尽服务端连接池；大量 RST 可能是端口扫描的特征。我在 Wireshark 里亲手抓过三次握手的每个包。`,
+    keys:['标志位与序列号正确','四次挥手说清了两个方向','联系到安全场景（SYN Flood/扫描）','提到 Wireshark 实操'] },
+  { q:'什么是 SIEM？你用过哪些？',
+    model:`<b>定义</b>→<b>核心功能</b>→<b>你亲手做了什么</b>`,
+    answer:`SIEM = Security Information and Event Management，日志集中+关联分析+告警的平台。我亲手用 Docker Compose 部署了 ELK 8.11 三件套：Logstash 用 Grok 把 Apache 日志拆成结构化字段入 ES，Kibana 做了状态码分布/IP Top/趋势 Dashboard，并基于基线配置了 404 突增和可疑 IP 两条告警规则。我还体验了 Elastic Security 的自定义检测规则与 Timeline。如果问商业产品，我知道 Splunk、QRadar、奇安信态势感知，但动手经验主要在 ELK。`,
+    keys:['SIEM 定义正确','提到具体组件与功能','有亲手部署经验','知道商业产品（扩展性）'] },
+  { q:'你了解 MITRE ATT&CK 框架吗？',
+    model:`<b>定义</b>→<b>关键战术</b>→<b>你做过映射</b>→<b>检测价值</b>`,
+    answer:`ATT&CK 是 MITRE 维护的攻击者行为知识库，按战术（Tactic）和技术（Technique）组织。我熟记 8 个核心战术：初始访问(TA0001)、执行(TA0002)、持久化(TA0003)、防御规避(TA0005)、凭证访问(TA0006)、发现(TA0007)、横向移动(TA0008)、数据外泄(TA0010)。我做过映射练习：SQL 注入=T1190、暴力破解=T1110、WebShell=T1505.003。在 SIEM 里检测规则就是按这些 T 编号命名的——这是安全运营的通用语言。`,
+    keys:['知道是"行为知识库"','能说出多个战术编号','做过攻击映射练习','提到 SIEM 规则与 ATT&CK 的关系'] },
+  { q:'什么是零信任？',
+    model:`<b>原则</b>→<b>与传统的区别</b>→<b>落地要素</b>`,
+    answer:`零信任的核心是"永不信任、始终验证"——不再假设"内网=可信"，每次访问都验证身份+设备状态+行为。与传统边界的区别：传统靠防火墙画边界，边界内全信；零信任按最小权限逐次授权。落地三要素：身份（强认证/MFA）、设备（合规检查）、网络（微隔离）。这不是买一个产品，而是一种架构理念。`,
+    keys:['原则一句话说清','与传统边界的本质区别','提到身份/设备/网络三要素','不把它当一个产品'] },
+]},
+{ id:'project', ico:'📄', name:'第三轮 · 项目盘问', questions:[
+  { q:'讲一下你的 ELK 项目。遇到什么困难？怎么解决的？',
+    model:`<b>背景→做法→难点→结果</b>，重点在"难点"`,
+    answer:`我用 Docker Compose 部署了 ELK 8.11。最大的困难是第一天 ES 启动就崩——日志提示 max virtual memory areas 不够。我查了文档发现需要调内核参数 vm.max_map_count=262144，但改完重启虚拟机又忘了持久化。后来写进了 sysctl.d 才彻底解决。另一个坑是 Grok 解析：日志格式差一个空格就打 _grokparsefailure 标签。我用 Kibana 的 _grokparsefailure 搜索定位失败的行，逐行对照修正模板。最终 500 多条混合攻击流量全部正确解析并可检索。`,
+    keys:['有具体的报错信息','排查过程有步骤（不是"搜了下就解决了"）','最终有量化验证（500条全通）','体现"逐步排查"方法论'] },
+  { q:'你的 LogSentinel 项目里 AI 研判层是怎么设计的？如果 AI 挂了呢？',
+    model:`<b>架构设计→三铁律→降级方案</b>`,
+    answer:`AI 研判层的设计遵循三条铁律：<b>① JSON 进</b>——只给 AI 喂结构化告警摘要（IP/行为/证据），不喂原始日志；<b>② JSON 出</b>——强制输出固定 schema（severity/attack_type/behaviors/recommendation/confidence），代码可以解析；<b>③ 结论当建议</b>——AI 结论与规则引擎结论不一致时记为"AI 误判案例"，不自动执行。如果 AI 挂了（超时/配额/网络），整个调用包在 try/except 里，返回 None 并打日志——系统继续跑，只是少了 AI 意见这一列。AI 是增强不是依赖。`,
+    keys:['三铁律完整说出','"人在回环"理念','降级方案具体（try/except返回None）','不宣称 AI 是完美的'] },
+  { q:'你的三个项目有什么关联？为什么选这三个？',
+    model:`<b>逻辑链</b>：攻击理解→平台搭建→自动化检测`,
+    answer:`三个项目是一条递进线：<b>项目 3（DVWA）</b>让我理解攻击者怎么打——每个漏洞的 Payload 和日志特征我都亲手验证过；<b>项目 1（ELK）</b>让我学会防守方怎么看——把攻击日志变成可视化 Dashboard 和告警；<b>项目 2（LogSentinel）</b>把两者合起来——用 DVWA 留下的攻击特征写成 Python 检测规则，用 ELK 的思维做数据流设计。三个项目 = 攻击理解 → 平台能力 → 自动化检测，刚好覆盖安全运营的核心技能链。`,
+    keys:['三项目有递进逻辑','不是孤立的三个练习','覆盖"攻击理解→平台→自动化"技能链','体现规划性而非随意选'] },
+  { q:'如果重做你的项目，你会改进什么？',
+    model:`<b>主动暴露不足</b>→<b>具体改进方案</b>`,
+    answer:`三个改进点：<b>① LogSentinel 的滑动窗口在多机部署下会失效</b>（本地内存不共享）——改进方案是用 Redis 集中存储事件计数；<b>② ELK 的告警阈值是手拍的</b>——应该用历史数据自动计算基线并动态调整；<b>③ DVWA 报告缺少"自动化验证"</b>——可以写一个脚本自动验证修复后 Payload 是否仍能触发。主动暴露不足并给出改进方向，比"我的项目很完美"更有说服力。`,
+    keys:['不足具体且真实','改进方案可执行','体现"知道边界在哪"','不装完美'] },
+]},
+{ id:'scenario', ico:'🔥', name:'第四轮 · 场景应变', questions:[
+  { q:'凌晨 3 点你收到告警：生产数据库服务器 CPU 100%，疑似挖矿。你怎么处理？',
+    model:`<b>六步法按顺序</b>+<b>凌晨特有注意事项</b>`,
+    answer:`凌晨的特点是人少、变更风险高，所以更要谨慎：<b>①隔离</b>——断网不断电（保住内存证据）；<b>②取证</b>——远程抓内存镜像和 ps/lsof/ss 快照（如果不方便到场）；<b>③排查</b>——确认挖矿进程（kdevtmpfsi/xmrig）、找到持久化点（cron/systemd）、查入口（SSH日志/Webshell）；<b>④清除</b>——杀进程、删持久化、封矿池外联；<b>⑤恢复</b>——打补丁/改密/灰度上线；<b>⑥复盘</b>——天亮后写报告并汇报。凌晨不大规模变更（风险高），能隔离就先隔离到天亮再深修。`,
+    keys:['六步法顺序','凌晨特殊考虑（变更风险）','先隔离再深入','提到挖矿特征进程/持久化'] },
+  { q:'同事说他收到一封"CEO 发的紧急转账邮件"，让你确认是否真实。你怎么判断？',
+    model:`<b>技术验证 + 业务验证 + 处置建议</b>`,
+    answer:`<b>技术验证</b>：① 查邮件头——Authentication-Results 看 SPF/DKIM/DMARC 是否通过；② 看 Reply-To 是否与 From 一致（BEC 常用 Reply-To 重定向）；③ 看发件域名是否仿冒（corp-cfo.xyz vs corp.com）；④ 查历史——该"CEO"之前是否从这个域名发过邮件。<b>业务验证</b>：打电话给 CEO 本人确认（不能只回邮件）。<b>处置</b>：确认为 BEC → 阻止转账 + 加黑域名 + 通知全员培训。核心原则：<b>技术可以辅助判断，但"大额/变更账户"永远需要电话二次确认。</b>`,
+    keys:['邮件头验证（SPF/DKIM/DMARC）','Reply-To 检查','电话二次确认（不只靠技术）','处置包含通知全员'] },
+  { q:'你接手了一台"可能被入侵"的 Linux 服务器，上一任管理员已经重启了它。你现在有什么证据？怎么排查？',
+    model:`<b>承认损失</b>→<b>磁盘证据仍在</b>→<b>排查思路</b>`,
+    answer:`重启丢了内存证据（连接/进程），但<b>磁盘上的证据全在</b>：① 日志——auth.log（登录记录）、secure、cron、history（如果没清）；② 文件系统——文件时间戳（find -mtime）、新增 SUID、异常公钥；③ 网络——当前连接虽然不是入侵时的，但如果有持久化外联仍可抓到；④ 排查思路不变——入口+驻留+外联三条线，只是"攻击时刻"要从日志时间戳反推。教训：应急时<b>先隔离再重启</b>——但已经重启了就别慌，磁盘证据足够定位大多数入侵。`,
+    keys:['承认内存证据丢失','明确磁盘证据仍在（日志/文件系统/网络）','排查思路三条线不变','给出教训（先隔离再重启）'] },
+  { q:'如果你发现同事（运维）的电脑上有可疑的 SUID 后门文件，你会怎么做？',
+    model:`<b>不 assume 恶意</b>→<b>按流程走</b>→<b>保护同事</b>`,
+    answer:`第一步不是"报警抓人"，而是<b>确认事实</b>：这个文件是运维自己的工具还是入侵者放的？→ 查文件的创建时间、来源（哪个会话写入的）、运维本人是否认识它。第二步<b>保护双方</b>：通知运维"你的机器可能有后门"（他是受害者也是潜在传播源），同时上报安全负责人。第三步<b>取证与处置</b>：保留文件样本 → 排查运维电脑是否有其他入侵痕迹 → 如果确认是入侵就按应急六步法走。<b>核心原则：不 assume 恶意，不私下处理，按流程走并保护同事</b>——他可能是受害者。`,
+    keys:['不预设恶意（同事可能是受害者）','确认事实（文件来源/时间）','上报安全负责人（不私下处理）','保护同事 + 按应急流程走'] },
+]},
+{ id:'hr', ico:'💬', name:'第五轮 · HR 压力', questions:[
+  { q:'你没有安全相关的工作经验，我们为什么要录用你？',
+    model:`<b>承认事实</b>→<b>强调学习产出</b>→<b>强调匹配度</b>→<b>降低风险</b>`,
+    answer:`确实，我没有正式的安全工作经验——这是我最大的短板。但 92 天里我产出了三个可验证的项目：部署过 ELK 平台、写过一个带 AI 研判的检测系统（有检测率数据）、复现了 19 类漏洞并写了防御分析。更重要的是，我证明了<b>零基础 92 天能做到这个程度</b>——入职后有人带、有真实环境，我的成长速度会比自学报班快得多。我不要求高薪，只求一个把学到的东西在真实环境中落地的机会。`,
+    keys:['大方承认（不回避）','用项目产出证明能力','强调学习速度（92天数据）','主动降低企业风险（不要求高薪）'] },
+  { q:'你为什么离开上一份工作？',
+    model:`<b>不贬前公司</b>→<b>正向理由</b>→<b>与安全岗位的关联</b>`,
+    answer:`上一份工作让我学到了（正面描述），但我发现自己对安全有强烈的兴趣——当（触发事件）发生时，我开始自学并越学越投入。我决定全力转向安全运营，不是为了逃离什么，而是因为<b>我终于找到了我想长期深耕的方向</b>。我利用 92 天完成了系统学习和三个项目，证明我不是一时兴起，而是经过深思熟虑的职业选择。`,
+    keys:['不贬前公司','正向描述选择原因','与安全岗位建立关联','证明是深思熟虑不是冲动'] },
+  { q:'你的薪资期望是多少？',
+    model:`<b>有底线但不设高墙</b>→<b>强调成长优先</b>→<b>给出范围</b>`,
+    answer:`我了解作为零基础转型者，薪资起点不会太高——这我完全接受。我的优先级是：<b>进入一个能学到真东西的团队</b>。如果一定要给范围，我期望在（当地安全运营岗入门薪资范围）左右，具体可以根据岗位职责和团队情况调整。我更看重的是<b>入职后能在多短时间内独立扛事</b>——我相信以我的学习能力，转正后的薪资会反映我的实际价值。`,
+    keys:['了解市场行情（知道自己是入门）','优先级是学习而非薪资','给出范围但不设死','表达长期价值信心'] },
+  { q:'如果你入职后发现实际工作和预期不一样怎么办？',
+    model:`<b>调整预期</b>→<b>主动沟通</b>→<b>在现实中找成长点</b>`,
+    answer:`入职前预期与现实的落差是每个转行者都会遇到的。我的处理方式：<b>先干好手头的活</b>（哪怕不是理想中的攻防对抗而是改防火墙策略），因为每件事都能学到东西；<b>主动与上级沟通</b>，表达我想参与更多安全检测/响应工作的意愿；<b>在现实中找安全运营的成长点</b>——即使是改防火墙策略，也能学到网络架构和规则逻辑。我不会因为"和预期不同"就消极怠工——92 天的学习让我习惯了在不确定中前进。`,
+    keys:['调整预期（现实≠理想）','主动沟通（不闷头抱怨）','在任何工作中找成长点','体现适应性'] },
+  { q:'你未来 3~5 年的职业规划是什么？',
+    model:`<b>短中长期</b>→<b>与公司绑定</b>`,
+    answer:`<b>短期（1年）</b>：在团队中独立承担告警研判和应急响应，考取 CISP。<b>中期（2~3年）</b>：成为 Tier 2 分析师，能独立扛事件、写检测规则、做溯源报告——同时深入一个方向（比如检测工程或云安全）。<b>长期（3~5年）</b>：往高级安全运营或 SOC 团队负责人的方向发展——不只是技术更强，而是能把个人能力变成团队能力。我希望这个成长过程能在贵公司完成。`,
+    keys:['短/中/长期三段','短期具体可执行（不是空话）','中期有专业深度方向','与公司发展绑定'] },
+]},
+];
+
+/* ---------- 渲染 ---------- */
+const tabsEl = document.getElementById('roundTabs');
+const contentEl = document.getElementById('roundContent');
+tabsEl.innerHTML = ROUNDS.map((r, i) =>
+  `<div class="round-tab ${i===0?'active':''}" data-i="${i}"><span class="r-ico">${r.ico}</span><span>${r.name}</span><span class="r-done" style="display:none">✅</span></div>`
+).join('');
+contentEl.innerHTML = ROUNDS.map((r, i) => {
+  const qs = r.questions.map((q, qi) => {
+    const uid = `rq${i}_${qi}`;
+    return `<div class="q-block">
+      <div class="q-t">Q${qi+1}. ${q.q}</div>
+      <textarea id="${uid}_answer" placeholder="在这里写下你的回答（建议先自己组织语言再打字）……"></textarea>
+      <button class="btn btn-sm btn-ghost reveal-btn" onclick="document.getElementById('${uid}_ans').classList.add('show');this.style.display='none'">📖 查看参考答案</button>
+      <div class="model-answer" id="${uid}_ans"><div>${q.model}</div>
+        <div class="key-points"><b>✅ 自评要点（逐项勾选）</b><ul>${q.keys.map(k=>`<li>${k}</li>`).join('')}</ul></div>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="round-page" id="rp-${i}" style="display:${i===0?'block':'none'}"><h3 style="font-size:16px;font-weight:800;margin:0 0 14px">${r.ico} ${r.name}</h3>${qs}</div>`;
+}).join('');
+
+function showRound(idx) {
+  document.querySelectorAll('.round-tab').forEach((t,i)=>t.classList.toggle('active', i===idx));
+  document.querySelectorAll('.round-page').forEach((p,i)=>p.style.display = i===idx ? 'block' : 'none');
+}
+document.querySelectorAll('.round-tab').forEach(t => t.onclick = () => showRound(+t.dataset.i));
+showRound(0);
+</script>
+</body>
+</html>

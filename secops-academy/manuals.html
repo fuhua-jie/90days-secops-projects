@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>手册文库 · 应急/研判/护网 · SecOps Academy</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
+<link rel="stylesheet" href="assets/css/style.css">
+<style>
+.manual-layout{display:grid;grid-template-columns:250px 1fr;gap:20px;align-items:start}
+.manual-tabs{position:sticky;top:82px;display:flex;flex-direction:column;gap:8px}
+.manual-tab{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;cursor:pointer;
+  border:1px solid transparent;color:var(--tx2);transition:.2s;font-size:13.5px;font-weight:600}
+.manual-tab:hover{background:var(--card)}
+.manual-tab.active{background:var(--card2);border-color:rgba(34,211,238,.4);color:var(--tx)}
+.manual-tab .m-ico{font-size:18px}
+.manual-page{display:none}
+.manual-page.active{display:block}
+.man-h{font-size:15.5px;font-weight:800;margin:22px 0 8px;color:var(--tx);border-left:3px solid var(--cy);padding-left:10px}
+.man-pre{background:rgba(3,7,18,.7);border:1px solid var(--line);border-radius:10px;padding:12px 14px;
+  font-family:var(--m);font-size:12.5px;line-height:1.9;white-space:pre-wrap;word-break:break-word;color:var(--li);margin:8px 0 14px;overflow-x:hidden}
+.man-table{width:100%;border-collapse:collapse;font-size:12.8px;margin:8px 0 16px;background:rgba(3,7,18,.5)}
+.man-table th{color:var(--cy);text-align:left;padding:7px 10px;border-bottom:1px solid var(--line)}
+.man-table td{padding:7px 10px;border-bottom:1px solid rgba(51,65,85,.4);vertical-align:top}
+.man-check{list-style:none;padding:0;margin:8px 0 14px}
+.man-check li{padding:6px 0 6px 30px;position:relative;border-bottom:1px dashed rgba(51,65,85,.4)}
+.man-check li::before{content:"☐";position:absolute;left:4px;color:var(--cy)}
+.man-warn{background:rgba(224,60,50,.08);border:1px solid rgba(224,60,50,.35);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--tx2);margin:10px 0 16px}
+@media (max-width:900px){
+  .manual-layout{grid-template-columns:1fr}
+  .manual-tabs{position:static;flex-direction:row;overflow-x:auto;padding-bottom:6px;scrollbar-width:none}
+  .manual-tabs::-webkit-scrollbar{display:none}
+  .manual-tab{flex:0 0 auto;max-width:60vw}
+  .manual-tab span.m-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+}
+@media print{
+  .topbar,.footer,.manual-tabs,.no-print{display:none !important}
+  .manual-page{display:block !important;page-break-after:always}
+  body{background:#fff;color:#111}
+  .man-pre{background:#f5f5f5;color:#111}
+  .man-table td,.man-table th{color:#111;border-color:#ccc}
+  .manual-page{color:#111}
+  .man-h{color:#111}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="container topbar-in">
+    <a class="logo" href="index.html"><span class="shield">🛡️</span><span>SecOps<em>Academy</em></span></a>
+    <nav class="nav">
+      <a href="index.html">首页</a>
+      <a href="learn.html">学习</a>
+      <a href="games.html">游戏</a>
+      <a href="quiz.html">题库</a>
+      <a href="cases.html">案例</a>
+      <a href="glossary.html">术语</a>
+    </nav>
+    <a class="xp-pill" href="#" id="xpPill">
+      <span class="lvl-num" data-level-num>1</span>
+      <span class="xp-info"><b data-level-title>实习监控员</b><span class="bar"><i data-xp-bar style="width:0%"></i></span></span>
+      <span class="xp-num" data-xp-text>0 XP</span>
+    </a>
+  </div>
+</header>
+
+<section class="section" style="padding-top:34px">
+  <div class="container">
+    <div class="section-head" style="margin-bottom:22px;text-align:left">
+      <span class="eyebrow">OPERATIONS MANUALS · 手边手册</span>
+      <h2 class="h2">📖 手册文库<span class="grad">· 拿来就能用</span></h2>
+      <p class="section-sub">应急响应、告警研判、护网加固、报告模板——真实工作里"照着做"的操作手册。与中级模块课程配套，支持打印贴在工位。</p>
+      <button class="btn btn-sm btn-ghost no-print" onclick="window.print()" style="margin-top:8px">🖨️ 打印全部手册</button>
+    </div>
+
+    <div class="manual-layout">
+      <aside class="manual-tabs" id="manualTabs"></aside>
+      <div id="manualContent"></div>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container f-bottom" style="border:none;margin-top:0;padding-top:0">
+    <span>📖 SecOps Academy · 手册文库</span><span>与「中级安全运营」模块配套 · 建议打印留存</span>
+  </div>
+</footer>
+
+<script>
+const MANUALS = [
+  /* ================= 手册 1：Linux 应急 ================= */
+  { id: 'linux', ico: '🐧', name: 'Linux 入侵应急响应', page: `
+    <div class="man-h">六步法（顺序不能乱）</div>
+    <div class="man-pre">① 隔离：断网不断电（保留内存与日志证据）
+② 取证：先拍快照/导日志，再动手排查
+③ 排查：入口（怎么进来的）+ 驻留（怎么留下的）
+④ 清除：后门/账号/定时任务/公钥
+⑤ 恢复：改密/补丁/灰度上线
+⑥ 复盘：时间线 + 整改清单 + 报告</div>
+    <div class="man-h">第①②步：固定证据（动手前必做）</div>
+    <div class="man-pre">ps auxf &gt; /tmp/ps.txt\nss -antp &gt; /tmp/ss.txt\nlsof -i &gt; /tmp/lsof.txt\ncrontab -l &gt; /tmp/cron.txt\ncp -r /var/log/ /tmp/evidence_logs/</div>
+    <div class="man-h">第③步-A：入口排查（怎么进来的）</div>
+    <div class="man-pre">grep -E "Accepted|Failed" /var/log/secure | tail -50   # SSH 登录\nlast -20; lastb -20                                    # 登录历史/失败\nawk -F: '$3==0{print $1}' /etc/passwd                  # 隐藏 uid=0 账号\ncat /root/.ssh/authorized_keys                          # 陌生公钥\nfind / -mtime -3 -type f 2&gt;/dev/null                    # 近 3 天新增文件</div>
+    <div class="man-h">第③步-B：驻留排查（持久化五处 + 外联）</div>
+    <div class="man-pre">① crontab -l; ls -la /etc/cron.d/\n② systemctl list-unit-files --state=enabled; systemctl list-timers\n③ cat /etc/rc.local\n④ ls -la /etc/profile.d/; cat /root/.bashrc | tail\n⑤ cat /home/*/.ssh/authorized_keys\n\nss -antp | grep ESTAB | grep -vE "10\\.|127\\."   # 可疑外联\ntop -b -n1 | head -15                            # 挖矿进程(kdevtmpfsi/xmrig)</div>
+    <div class="man-h">处置红线</div>
+    <div class="man-warn">🚫 不要急着重启/重装（丢内存证据）｜🚫 不要直接删恶意文件（先留样本）｜🚫 不要忘改所有相关密码（数据库/堡垒机/VPN）</div>
+    <div class="man-h">产出报告六要素</div>
+    <div class="man-pre">时间线（何时/如何进入）→ 影响面（主机/数据）→ IOC 清单（IP/哈希/域名）→ 已处置动作 → 待办（补丁/改密）→ 教训与加固项</div>
+  `},
+
+  /* ================= 手册 2：Windows 应急 ================= */
+  { id: 'windows', ico: '🪟', name: 'Windows 入侵应急响应', page: `
+    <div class="man-h">驻留点排查清单（Autoruns 一站式 + 手动复核）</div>
+    <div class="man-table"><tr><th>驻留点</th><th>排查方式</th></tr>
+      <tr><td>进程/服务</td><td>Process Explorer（验证签名+看进程链）、services.msc、事件 7045（新服务）</td></tr>
+      <tr><td>自启动全家</td><td>Autoruns（勾 Hide Microsoft Entries，逐个看剩余项）</td></tr>
+      <tr><td>计划任务</td><td>schtasks /query + 事件 4698</td></tr>
+      <tr><td>注册表 Run</td><td>HKCU\\...\\Run / HKLM\\...\\Run / RunOnce</td></tr>
+      <tr><td>WMI 订阅</td><td>Autoruns 的 WMI 标签（无文件持久化重灾区）</td></tr>
+      <tr><td>账号与组</td><td>lusrmgr.msc + 事件 4720（建号）/4728/4732（加组）</td></tr>
+      <tr><td>灭迹行为</td><td>事件 1102（日志被清=实锤警报）</td></tr>
+    </div>
+    <div class="man-h">快速排查命令</div>
+    <div class="man-pre">netstat -ano | findstr ESTABLISHED        # 外联（-o 拿 PID 查进程）\nGet-WinEvent -FilterHashtable @{LogName="Security";Id=4625} -MaxEvents 50\nGet-ScheduledTask | Where State -eq "Ready"\nwmic process get name,processid,parentprocessid,commandline</div>
+    <div class="man-h">勒索攻击处置 SOP（顺序背下来）</div>
+    <div class="man-pre">① 隔离：拔网线（不断电！内存可能有密钥/进程）\n② 判定：加密范围 + 勒索信 + ID 上传查解密器（nomoreransom.org）\n③ 取证：vssadmin list shadows（卷影副本=第一恢复希望）\n④ 止血：全网阻断传播（SMB/共享/口令），定位 patient zero\n⑤ 恢复：优先离线备份 → 卷影 → 解密器；不建议交赎金\n⑥ 复盘：入口多为弱口令 RDP / 钓鱼 / 未修补漏洞</div>
+    <div class="man-warn">🚫 直接关机/重启 = 丢内存证据 ｜ 🚫 急着重装 = 不知道入口，下周再中一次</div>
+  `},
+
+  /* ================= 手册 3：告警研判 SOP ================= */
+  { id: 'triage', ico: '🚨', name: '告警研判 SOP', page: `
+    <div class="man-h">研判五步（每条告警都走一遍）</div>
+    <div class="man-pre">① 看原始日志（告警只是线索，日志才是真相）\n② 定性：真实攻击 / 误报 / 白名单 / 低价值噪音\n③ 定影响面：哪个资产、哪些数据、是否已有成功痕迹\n④ 处置：封禁/隔离/上报/忽略（按定性结果）\n⑤ 记录：工单留痕（时间/结论/动作/证据截图）</div>
+    <div class="man-h">常见告警族速判表</div>
+    <div class="man-table"><tr><th>告警现象</th><th>先排除（误报源）</th><th>确认攻击的信号</th><th>第一动作</th></tr>
+      <tr><td>高频 404</td><td>已知爬虫/合作方漏扫/自家扫描器</td><td>同源集中+敏感路径（/.env /backup）</td><td>封源+WAF 加规则</td></tr>
+      <tr><td>同源高频登录失败</td><td>用户输错密码（单人单次）</td><td>失败后紧跟成功 / 多账号尝试</td><td>封源+冻结账号+查成功登录</td></tr>
+      <tr><td>异常外联</td><td>业务更新/CDN/补丁服务器</td><td>非业务端口+境外+长连接</td><td>隔离主机+封目标</td></tr>
+      <tr><td>新建账号/加组</td><td>变更单内的运维操作</td><td>无变更单+非常规时段</td><td>禁用账号+查创建者会话</td></tr>
+      <tr><td>清日志(1102)</td><td>几乎没有误报</td><td>本身就是警报</td><td>立即升级 Tier2</td></tr>
+    </div>
+    <div class="man-h">白名单纪律</div>
+    <div class="man-warn">最小化（按字段+值排除，不关整条规则）｜有注释（谁加的/为什么）｜季度复审（过期即删）——失控的白名单是最大的隐形后门</div>
+  `},
+
+  /* ================= 手册 4：护网清单 ================= */
+  { id: 'hvv', ico: '🪖', name: '护网战前加固清单', page: `
+    <div class="man-h">战前七件事（提前 90 天倒排）</div>
+    <ul class="man-check">
+      <li><b>资产测绘</b>：影子资产/僵尸系统/孙公司旁站全部清查入台账</li>
+      <li><b>暴露面收敛</b>：后台/数据库/管理口不落互联网；VPN 双因子</li>
+      <li><b>弱口令清零</b>：OA/邮箱/域/VPN 全改（历届 90% 战果始于弱口令）</li>
+      <li><b>钓鱼演练</b>：全员测试 + 针对培训（点击率压到 5% 以下）</li>
+      <li><b>蜜罐部署</b>：高交互蜜罐 = 溯源反制的抓手</li>
+      <li><b>日志集中</b>：留存 ≥180 天，溯源证据才齐</li>
+      <li><b>补丁会战</b>：TOP 高危全修 + 虚拟补丁（87% 防守失败源于基础漏洞未修）</li>
+    </ul>
+    <div class="man-h">战时值守纪律</div>
+    <div class="man-pre">研判三问：是真实攻击吗（排除爬虫/合作方漏扫）？影响哪个资产？要不要上报？\n\n封禁纪律：先研判再封；白名单（裁判公告的合作方）误封扣分；\n严禁"关机式防守"（下线业务=非正常防守，倒扣分）\n\n注意：红队每天换 IP、凌晨总攻、钓鱼+0day 组合——按批次统计攻击源</div>
+    <div class="man-h">溯源与反制</div>
+    <div class="man-pre">日志溯源：FW/WAF/EDR/DNS 多源交叉还原攻击链\n蜜罐反制：诱捕样本 → 分析跳板与工具 → 授权范围内反制（越权反制取消资格）\n溯源到人 = 高额加分（样本诱导读取攻击者本地文件 → 社交账号定位）</div>
+  `},
+
+  /* ================= 手册 5：报告与交接 ================= */
+  { id: 'report', ico: '📑', name: '报告与交接模板', page: `
+    <div class="man-h">事件/告警分析报告（六段式模板）</div>
+    <div class="man-pre">1 事件概述：时间/资产/定性（一句话说清）\n2 处置时间线：发现→研判→遏制→恢复（全部带时间戳）\n3 攻击分析：入口 / 手法（对齐 ATT&CK 技术）/ IOC 清单（IP/哈希/域名）\n4 影响评估：数据 / 业务 / 合规影响\n5 处置与建议：已完成动作 + 短期加固 + 长期改进\n6 附录：关键日志与截图</div>
+    <div class="man-h">值班交接清单（四件套）</div>
+    <ul class="man-check">
+      <li>未闭环告警清单（编号/等级/当前状态/下一步负责人）</li>
+      <li>当日封禁 IP 汇总（含到期时间，防止白名单式遗忘）</li>
+      <li>设备与平台异常（采集断流/规则失效必须标注）</li>
+      <li>待跟进工单 + 重点情报（新爆发漏洞/新攻击活动通报）</li>
+    </ul>
+    <div class="man-h">IOC 清单标准格式</div>
+    <div class="man-pre"># 类型,值,置信度,首次发现,备注\nip,45.83.66.23,high,2026-07-18,爆破+扫描攻击源\ndomain,evil-cdn.net,high,2026-07-18,C2 域名\nhash,44d88612fea8a8f36de82e1278abb02f,medium,2026-07-18,Eicar 测试样本</div>
+  `},
+
+  /* ================= 手册 6：速查表 ================= */
+  { id: 'cheatsheet', ico: '📇', name: '速查表：端口/事件ID/路径', page: `
+    <div class="man-h">危险/常见端口速查</div>
+    <div class="man-table"><tr><th>端口</th><th>服务</th><th>安全关注</th></tr>
+      <tr><td>22 / 3389</td><td>SSH / RDP</td><td>爆破第一目标，勿裸奔公网</td></tr>
+      <tr><td>445</td><td>SMB</td><td>永恒之蓝/蠕虫传播/勒索扩散</td></tr>
+      <tr><td>23 / 21</td><td>Telnet / FTP</td><td>明文协议，应关闭</td></tr>
+      <tr><td>3306 / 1433 / 6379 / 27017</td><td>MySQL / MSSQL / Redis / Mongo</td><td>不该出现在公网，未授权=直接失陷</td></tr>
+      <tr><td>4444 / 3333 / 5555</td><td>常见 C2 / 矿池</td><td>外联这些端口优先排查</td></tr>
+      <tr><td>5900</td><td>VNC</td><td>弱口令重灾区</td></tr>
+    </div>
+    <div class="man-h">Windows 事件 ID 速查</div>
+    <div class="man-table"><tr><th>ID</th><th>含义</th><th>ID</th><th>含义</th></tr>
+      <tr><td>4624</td><td>登录成功</td><td>4625</td><td>登录失败（爆破数据源）</td></tr>
+      <tr><td>4672</td><td>特权登录</td><td>4688</td><td>新进程创建</td></tr>
+      <tr><td>4720</td><td>账号创建</td><td>4728/4732</td><td>加入管理组</td></tr>
+      <tr><td>7045</td><td>新服务安装（psexec 横向标志）</td><td>1102</td><td>日志被清除（灭迹实锤）</td></tr>
+      <tr><td>4698</td><td>计划任务创建</td><td>4656/4663</td><td>敏感对象访问</td></tr>
+    </div>
+    <div class="man-h">Logon Type 速查</div>
+    <div class="man-pre">2=交互(本机键盘)  3=网络(共享/网络服务)  5=服务\n8=明文网络登录  9=NewCredentials(哈希传递标志!)  10=RDP</div>
+    <div class="man-h">Linux 关键文件路径</div>
+    <div class="man-pre">账号：/etc/passwd /etc/shadow /etc/sudoers\nSSH：/root/.ssh/authorized_keys /home/*/.ssh/\n自启：/etc/cron* /etc/systemd/system/ /etc/rc.local /etc/profile.d/\n日志：/var/log/secure(或auth.log) /var/log/cron /var/log/messages</div>
+  `},
+];
+
+/* ---------- 渲染 ---------- */
+const tabsEl = document.getElementById('manualTabs');
+const contentEl = document.getElementById('manualContent');
+tabsEl.innerHTML = MANUALS.map((m, i) =>
+  `<div class="manual-tab ${i === 0 ? 'active' : ''}" data-i="${i}"><span class="m-ico">${m.ico}</span><span class="m-name">${m.name}</span></div>`
+).join('');
+contentEl.innerHTML = MANUALS.map((m, i) =>
+  `<div class="manual-page card ${i === 0 ? 'active' : ''}" id="mp-${i}" style="padding:20px 24px">${m.page}</div>`
+).join('');
+
+function show(idx) {
+  document.querySelectorAll('.manual-tab').forEach((t, i) => t.classList.toggle('active', i === idx));
+  document.querySelectorAll('.manual-page').forEach((p, i) => p.classList.toggle('active', i === idx));
+}
+document.querySelectorAll('.manual-tab').forEach(t => t.onclick = () => show(+t.dataset.i));
+show(0);
+</script>
+</body>
+</html>

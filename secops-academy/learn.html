@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>课程中心 · SecOps Academy</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="container topbar-in">
+    <a class="logo" href="index.html"><span class="shield">🛡️</span><span>SecOps<em>Academy</em></span></a>
+    <nav class="nav">
+      <a href="index.html">首页</a>
+      <a href="learn.html">学习</a>
+      <a href="games.html">游戏</a>
+      <a href="quiz.html">题库</a>
+      <a href="cases.html">案例</a>
+      <a href="glossary.html">术语</a>
+    </nav>
+    <a class="xp-pill" href="#" id="xpPill">
+      <span class="lvl-num" data-level-num>1</span>
+      <span class="xp-info"><b data-level-title>实习监控员</b><span class="bar"><i data-xp-bar style="width:0%"></i></span></span>
+      <span class="xp-num" data-xp-text>0 XP</span>
+    </a>
+  </div>
+</header>
+
+<section class="section" style="padding-top:40px">
+  <div class="container">
+    <div class="section-head" style="margin-bottom:30px">
+      <span class="eyebrow">COURSES</span>
+      <h2 class="h2">课程<span class="grad">中心</span></h2>
+      <p class="section-sub">零基础友好：每个概念都先打比方再讲原理。点开任意课程即学，进度自动保存。</p>
+    </div>
+
+    <div class="learn-layout">
+      <aside class="module-nav" id="moduleNav"></aside>
+      <div>
+        <div class="card" style="margin-bottom:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap" id="moduleIntro"></div>
+        <div class="lesson-list" id="lessonList"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 课程阅读弹窗 -->
+<div class="modal-mask" id="lessonMask">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h3 id="lsTitle">课程标题</h3>
+        <div class="m-sub" id="lsMeta"></div>
+      </div>
+      <button class="modal-close" id="lsClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="lesson-content" id="lsBody"></div>
+      <div style="display:flex;gap:12px;margin-top:24px;align-items:center">
+        <button class="btn btn-primary" id="lsDone" style="flex:1">✅ 我学会了，完成本课（+25 XP）</button>
+      </div>
+      <div style="text-align:center;margin-top:10px">
+        <button class="btn btn-sm btn-ghost" id="lsPrev">← 上一课</button>
+        <button class="btn btn-sm btn-ghost" id="lsNext">下一课 →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="footer">
+  <div class="container f-bottom" style="border:none;margin-top:0;padding-top:0">
+    <span>🛡️ SecOps Academy · 课程中心</span><span>进度保存在本地浏览器</span>
+  </div>
+</footer>
+
+<script src="assets/js/data-lessons.js"></script>
+<script src="assets/js/data-plan-junior.js"></script>
+<script src="assets/js/data-plan-mid.js"></script>
+<script src="assets/js/data-plan-senior.js"></script>
+<script src="assets/js/data-days-20-32.js"></script>
+<script src="assets/js/data-days-33-52.js"></script>
+<script src="assets/js/data-days-53-62.js"></script>
+<script src="assets/js/data-days-63-72.js"></script>
+<script src="assets/js/data-days-73-87.js"></script>
+<script src="assets/js/data-days-88-92.js"></script>
+<script src="assets/js/data-quiz.js"></script>
+<script src="assets/js/progress.js"></script>
+<script src="assets/js/main.js"></script>
+<script src="assets/js/learn.js"></script>
+</body>
+</html>

@@ -1,0 +1,192 @@
+/* ============================================================
+   themes.css — 多主题系统（左下角 🎨 切换，localStorage 记忆）
+   每套主题 = 变量覆盖 + 背景/卡片层微调
+   ============================================================ */
+
+/* ---------- 默认主题：赛博暗夜（cyber，无需 data-theme） ---------- */
+
+/* ---------- ① 深空玻璃（ThreeUI 风格） ---------- */
+body[data-theme="threeui"]{
+  --bg0:#04050d;
+  --bg1:#080a18;
+  --bg2:#0e1130;
+  --card:rgba(255,255,255,.04);
+  --card2:rgba(255,255,255,.07);
+  --line:rgba(255,255,255,.09);
+  --line2:rgba(255,255,255,.17);
+  --cy:#818cf8;
+  --vi:#c084fc;
+  --grad:linear-gradient(135deg,#60a5fa 0%,#a78bfa 55%,#f472b6 100%);
+  --glow-cy:0 0 26px rgba(129,140,248,.30);
+  --pc1:129,140,248;
+  --pc2:192,132,252;
+  --pc3:244,114,182;
+}
+body[data-theme="threeui"]::before{
+  background:
+    radial-gradient(1000px 560px at 12% -8%, rgba(99,102,241,.20), transparent 62%),
+    radial-gradient(900px 600px at 96% 6%, rgba(168,85,247,.16), transparent 60%),
+    radial-gradient(900px 700px at 50% 115%, rgba(59,130,246,.12), transparent 62%),
+    #04050d;
+}
+body[data-theme="threeui"]::after{
+  background-image:
+    linear-gradient(rgba(129,140,248,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(129,140,248,.05) 1px, transparent 1px);
+}
+body[data-theme="threeui"] .card{
+  background:linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.015));
+  border-color:rgba(255,255,255,.09);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05), 0 18px 50px rgba(0,0,0,.45);
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+}
+body[data-theme="threeui"] .card-hov:hover{
+  border-color:rgba(129,140,248,.55);
+  box-shadow:0 18px 50px rgba(0,0,0,.5), 0 0 34px rgba(129,140,248,.22);
+}
+body[data-theme="threeui"] .topbar{background:rgba(4,5,13,.72)}
+body[data-theme="threeui"] .btn-primary{box-shadow:0 6px 28px rgba(129,140,248,.4)}
+body[data-theme="threeui"] .terminal,
+body[data-theme="threeui"] .ev-box,
+body[data-theme="threeui"] .log-panel{border-color:rgba(129,140,248,.22)}
+
+/* ---------- ② 极光脉冲（Aurora） ---------- */
+body[data-theme="aurora"]{
+  --bg0:#03121c;
+  --bg1:#05202c;
+  --bg2:#07293a;
+  --line:rgba(148,233,214,.15);
+  --line2:rgba(148,233,214,.28);
+  --cy:#2dd4bf;
+  --vi:#38bdf8;
+  --grad:linear-gradient(135deg,#34d399 0%,#22d3ee 55%,#818cf8 100%);
+  --glow-cy:0 0 26px rgba(45,212,191,.3);
+  --pc1:52,211,153;
+  --pc2:34,211,238;
+  --pc3:129,140,248;
+}
+body[data-theme="aurora"]::before{
+  background:
+    radial-gradient(1000px 540px at 10% -10%, rgba(16,185,129,.17), transparent 60%),
+    radial-gradient(900px 620px at 95% 10%, rgba(34,211,238,.13), transparent 60%),
+    radial-gradient(900px 700px at 45% 112%, rgba(129,140,248,.10), transparent 62%),
+    #03121c;
+}
+body[data-theme="aurora"]::after{
+  background-image:
+    linear-gradient(rgba(94,234,212,.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(94,234,212,.045) 1px, transparent 1px);
+}
+body[data-theme="aurora"] .topbar{background:rgba(3,18,28,.72)}
+body[data-theme="aurora"] .eyebrow{border-color:rgba(45,212,191,.4);background:rgba(45,212,191,.07);color:#5eead4}
+
+/* ---------- ③ 霓虹复古（Synthwave） ---------- */
+body[data-theme="synth"]{
+  --bg0:#0c0518;
+  --bg1:#150a26;
+  --bg2:#1d0f38;
+  --line:rgba(244,114,182,.16);
+  --line2:rgba(244,114,182,.3);
+  --cy:#f472b6;
+  --vi:#818cf8;
+  --grad:linear-gradient(135deg,#f472b6 0%,#c084fc 50%,#fb923c 100%);
+  --glow-cy:0 0 26px rgba(244,114,182,.32);
+  --pc1:244,114,182;
+  --pc2:251,146,60;
+  --pc3:129,140,248;
+}
+body[data-theme="synth"]::before{
+  background:
+    radial-gradient(1000px 540px at 50% -12%, rgba(244,114,182,.16), transparent 62%),
+    radial-gradient(800px 500px at 90% 12%, rgba(251,146,60,.10), transparent 58%),
+    radial-gradient(900px 620px at 6% 100%, rgba(129,140,248,.12), transparent 60%),
+    #0c0518;
+}
+body[data-theme="synth"]::after{
+  background-image:
+    linear-gradient(rgba(244,114,182,.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(244,114,182,.055) 1px, transparent 1px);
+}
+body[data-theme="synth"] .topbar{background:rgba(12,5,24,.74)}
+body[data-theme="synth"] .hero-title .grad,
+body[data-theme="synth"] .h2 .grad{filter:drop-shadow(0 0 18px rgba(244,114,182,.35))}
+body[data-theme="synth"] .btn-primary{box-shadow:0 6px 26px rgba(244,114,182,.4)}
+
+/* ---------- ④ 墨夜禅境（Kage · 影の道风） ---------- */
+body[data-theme="kage"]{
+  --bg0:#05070a;
+  --bg1:#0a0e12;
+  --bg2:#10151b;
+  --card:rgba(223,231,224,.025);
+  --card2:rgba(223,231,224,.05);
+  --line:rgba(223,231,224,.13);
+  --line2:rgba(223,231,224,.26);
+  --tx:#dfe7e0;
+  --tx2:#aab4ad;
+  --tx3:#78837c;
+  --cy:#ff5a4a;
+  --vi:#c9a24a;
+  --grad:linear-gradient(135deg,#ff5a3c 0%,#e0231c 48%,#c9a24a 100%);
+  --glow-cy:0 0 24px rgba(224,35,28,.35);
+  --pc1:223,231,224;
+  --pc2:255,90,60;
+  --pc3:201,162,74;
+}
+/* 月晕 + 暗角：朱砂之月悬于右上，边缘沉入墨色 */
+body[data-theme="kage"]::before{
+  background:
+    radial-gradient(125% 95% at 50% 40%, transparent 52%, rgba(2,4,6,.5) 100%),
+    radial-gradient(13vw 13vw at 74% 10%, rgba(232,52,28,.5), rgba(158,20,16,.3) 46%, transparent 72%),
+    radial-gradient(95vw 60vw at 50% -12%, rgba(120,150,158,.09), transparent 62%),
+    #05070a;
+  background-attachment:fixed;
+}
+/* 胶片颗粒：提到最上层混合叠加，全站电影质感 */
+body[data-theme="kage"]::after{
+  z-index:600;
+  opacity:.055;
+  mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size:180px 180px;
+}
+body[data-theme="kage"] .topbar{background:rgba(5,7,10,.6);border-bottom-color:var(--line)}
+body[data-theme="kage"] .card{background:rgba(223,231,224,.02)}
+body[data-theme="kage"] .card-hov:hover{border-color:rgba(223,231,224,.3);box-shadow:none;background:rgba(223,231,224,.045)}
+body[data-theme="kage"] .btn-primary{background:transparent;border:1px solid rgba(223,231,224,.4);color:var(--tx);box-shadow:none}
+body[data-theme="kage"] .btn-primary:hover{background:var(--tx);color:#05070a;border-color:var(--tx)}
+body[data-theme="kage"] .eyebrow{color:var(--tx2);border-color:var(--line2);background:transparent}
+body[data-theme="kage"] .kpi b{background:none;color:var(--tx)}
+body[data-theme="kage"] ::selection{background:#e0231c;color:#fff}
+body[data-theme="kage"] .theme-btn{background:rgba(5,7,10,.85)}
+body[data-theme="kage"] .hero-title,
+body[data-theme="kage"] .h2{font-weight:600;letter-spacing:.01em}
+body[data-theme="kage"] .h2 .grad,
+body[data-theme="kage"] .hero-title .grad{filter:drop-shadow(0 0 22px rgba(224,35,28,.26))}
+
+/* ============================================================
+   🎨 主题切换器（悬浮）
+   ============================================================ */
+.theme-btn{
+  position:fixed;left:18px;bottom:18px;z-index:600;
+  width:46px;height:46px;border-radius:50%;border:1px solid var(--line2);
+  background:var(--bg1);color:var(--tx);font-size:20px;cursor:pointer;
+  box-shadow:var(--shadow);transition:.2s;display:grid;place-items:center;
+}
+.theme-btn:hover{transform:rotate(20deg) scale(1.08);border-color:var(--cy)}
+.theme-panel{
+  position:fixed;left:18px;bottom:72px;z-index:600;width:252px;
+  background:var(--bg1);border:1px solid var(--line2);border-radius:16px;
+  box-shadow:var(--shadow);padding:12px;display:none;
+}
+.theme-panel.open{display:block;animation:pop .25s cubic-bezier(.2,.9,.3,1.2)}
+.theme-panel h5{font-size:12px;color:var(--tx3);margin:2px 4px 8px;font-family:var(--m);letter-spacing:1px}
+.theme-item{
+  display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  padding:9px 10px;border-radius:10px;border:1px solid transparent;
+  background:transparent;color:var(--tx);cursor:pointer;font-size:13.5px;font-weight:600;transition:.15s;
+}
+.theme-item:hover{background:var(--card2)}
+.theme-item.on{border-color:var(--cy);background:rgba(34,211,238,.08)}
+.theme-item .sw{display:flex;gap:3px;margin-left:auto}
+.theme-item .sw i{width:12px;height:12px;border-radius:50%;display:block;border:1px solid rgba(255,255,255,.25)}
+.theme-panel .tp-tip{font-size:11px;color:var(--tx3);margin:8px 4px 0;line-height:1.6}

@@ -1,0 +1,69 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-20260907T115459395Z-4208-d5da5393be36",
+  "runId": "20260907T115459395Z-4208-d5da5393be36",
+  "runStatus": "completed",
+  "coverage": {
+    "status": "complete",
+    "reasons": []
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "Stop"
+  },
+  "revision": null,
+  "diffHash": "435bdd23797e43096aff6023a0408301d1116b3f02b79eb75dc466a359f98143",
+  "rulesVersion": "unavailable",
+  "sessionHash": "622025093b2b081519ea1544fe10181f62a8e1cb1d8862cc2e9b1cbb78638ef8",
+  "reportRef": ".mimosa/reports/task-review-sess_e1ad42bf-f2ce-4f99-a342-0e81425229da-20260907T115459395Z-4208-d5da5393be36.json",
+  "events": [
+    {
+      "eventId": "hook-78342a053b68fb7ebf5a52fab7fac4cd",
+      "findingId": "mimosa-ab6e026421bd929638eb2ea0",
+      "type": "finding_observed",
+      "at": "2026-09-07T11:50:10.230Z",
+      "identity": {
+        "projectRelativeFile": "home.js",
+        "ruleId": "security",
+        "codeEvidenceHash": "d5b380331ad1cf2fc77d3b833cc44e23cf254f385a0778b9592d29946604883f",
+        "confidence": "stable"
+      },
+      "scope": "direct",
+      "line": 2,
+      "endLine": 2,
+      "reasonCode": "advisory",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "evidenceHash": "d5b380331ad1cf2fc77d3b833cc44e23cf254f385a0778b9592d29946604883f"
+      },
+      "sequence": 0
+    }
+  ],
+  "observedFindingIds": [
+    "mimosa-538a8d89fd8395a4a3945f2c",
+    "mimosa-5c430a68f7ce42b411c0456d",
+    "mimosa-af8cc7bf905cb92a8019e1cc",
+    "mimosa-a9e5e45aba3877d8b1706913",
+    "mimosa-60bf02ba61b3bd6662037b04",
+    "mimosa-ab6e026421bd929638eb2ea0",
+    "mimosa-2f3f14a2702051e3f75f9270",
+    "mimosa-db1c100bde4ac5709cd070eb",
+    "mimosa-5bd48b73760eba1cb462c295"
+  ],
+  "verifiedFiles": [
+    {
+      "file": "main.js",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "home.js",
+      "direct": "complete",
+      "projectContext": "partial"
+    }
+  ],
+  "recordedAt": "2026-09-07T11:55:00.306Z"
+}

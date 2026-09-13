@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>实战靶场终端 · SecOps Academy</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💻</text></svg>">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="container topbar-in">
+    <a class="logo" href="index.html"><span class="shield">🛡️</span><span>SecOps<em>Academy</em></span></a>
+    <nav class="nav">
+      <a href="index.html">首页</a>
+      <a href="learn.html">学习</a>
+      <a href="games.html">游戏</a>
+      <a href="quiz.html">题库</a>
+      <a href="cases.html">案例</a>
+      <a href="glossary.html">术语</a>
+    </nav>
+    <a class="xp-pill" href="#" id="xpPill">
+      <span class="lvl-num" data-level-num>1</span>
+      <span class="xp-info"><b data-level-title>实习监控员</b><span class="bar"><i data-xp-bar style="width:0%"></i></span></span>
+      <span class="xp-num" data-xp-text>0 XP</span>
+    </a>
+  </div>
+</header>
+
+<section class="section" style="padding-top:34px">
+  <div class="container">
+    <div class="section-head" style="margin-bottom:22px;text-align:left">
+      <span class="eyebrow">HANDS-ON LAB</span>
+      <h2 class="h2">💻 实战靶场终端<span class="grad">· 凌晨告警排查</span></h2>
+      <p class="section-sub">这不是演示——这是一台模拟的失陷主机。你用真实命令（grep / netstat / ps / crontab…）排查，每完成一项检测就推进案情、解锁讲解。</p>
+    </div>
+
+    <div class="lab-layout">
+      <!-- 终端 -->
+      <div class="terminal lab-term">
+        <div class="term-head">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="term-title">analyst@lab: ~ — 模拟失陷主机 · 应急排查</span>
+          <button class="btn btn-sm btn-ghost" id="labReset" style="margin-left:auto;padding:4px 12px;font-size:12px">重置靶场</button>
+        </div>
+        <div class="term-body" id="termBody"></div>
+      </div>
+
+      <!-- 任务侧栏 -->
+      <aside class="lab-side">
+        <div class="card task-card">
+          <h4>🎯 当前案情</h4>
+          <div class="t-obj" id="curCase">加载中…</div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn btn-sm btn-ghost" id="randomBtn" style="flex:1">🔀 随机换题</button>
+            <button class="btn btn-sm btn-ghost" id="pickerBtn" style="flex:1">📂 自选题库</button>
+          </div>
+          <button class="btn btn-sm btn-ghost" id="hintBtn" style="margin-top:8px;width:100%">💡 给个提示</button>
+        </div>
+        <div class="card">
+          <h4 style="font-size:14px;font-weight:800;margin-bottom:10px">📋 排查清单</h4>
+          <div class="task-checklist" id="taskChecklist"></div>
+        </div>
+        <div class="lab-banner" id="labBanner">
+          会话：SSH → 模拟失陷主机<br>
+          身份：root（应急响应权限）<br>
+          命令支持管道 | 与 grep/awk 组合
+        </div>
+      </aside>
+    </div>
+
+    <p style="color:var(--tx3);font-size:12.5px;margin-top:14px;font-family:var(--m)">
+      每次打开随机抽一题；想指定案情点「📂 自选题库」。先输 <b style="color:var(--cy)">help</b> 看命令，卡住输 <b style="color:var(--cy)">hint</b>，找到答案后输 <b style="color:var(--cy)">check 答案</b> 推进案情。
+    </p>
+  </div>
+</section>
+
+<!-- 案情选择器 -->
+<div class="modal-mask" id="pickerMask">
+  <div class="modal" style="max-width:860px">
+    <div class="modal-head">
+      <div><h3>📂 案情题库 <span id="pickCount" style="font-size:13px;color:var(--tx3)"></span></h3><div class="m-sub">共 20 案 · 覆盖日志 / Web 攻击 / 恶意软件 / 应急 / 情报 / 社工 / 外泄 / 后门</div></div>
+      <button class="modal-close" id="pickerClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="filter-row" id="pickerCats"></div>
+      <div class="grid g3" id="pickerGrid" style="gap:10px"></div>
+    </div>
+  </div>
+</div>
+
+<footer class="footer">
+  <div class="container f-bottom" style="border:none;margin-top:0;padding-top:0">
+    <span>🛡️ SecOps Academy · 实战靶场终端</span><span>模拟环境，命令与数据均为教学用途</span>
+  </div>
+</footer>
+
+<script src="assets/js/data-lessons.js"></script>
+<script src="assets/js/progress.js"></script>
+<script src="assets/js/main.js"></script>
+<script src="assets/js/diff.js"></script>
+<script src="assets/js/lab.js"></script>
+</body>
+</html>

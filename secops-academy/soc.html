@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOC 值班室 · SecOps Academy</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚨</text></svg>">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="container topbar-in">
+    <a class="logo" href="index.html"><span class="shield">🛡️</span><span>SecOps<em>Academy</em></span></a>
+    <nav class="nav">
+      <a href="index.html">首页</a>
+      <a href="learn.html">学习</a>
+      <a href="games.html">游戏</a>
+      <a href="quiz.html">题库</a>
+      <a href="cases.html">案例</a>
+      <a href="glossary.html">术语</a>
+    </nav>
+    <a class="xp-pill" href="#" id="xpPill">
+      <span class="lvl-num" data-level-num>1</span>
+      <span class="xp-info"><b data-level-title>实习监控员</b><span class="bar"><i data-xp-bar style="width:0%"></i></span></span>
+      <span class="xp-num" data-xp-text>0 XP</span>
+    </a>
+  </div>
+</header>
+
+<section class="section" style="padding-top:34px">
+  <div class="container">
+    <div class="section-head" style="margin-bottom:22px;text-align:left">
+      <span class="eyebrow">SOC CONSOLE · LIVE SHIFT</span>
+      <h2 class="h2">🚨 SOC 值班室<span class="grad">· 真实班次模拟</span></h2>
+      <p class="section-sub">这是一次完整的值班班次：告警会在随机时间弹进来（上一条处置完才会来下一条）。定级、定性、处置全部由你判断——做对了涨分，做错了掉 SLA。</p>
+    </div>
+
+    <!-- 开班画面 -->
+    <div class="card" id="socStart" style="max-width:720px;margin:0 auto;text-align:center;padding:40px 30px">
+      <div style="font-size:52px">🚨</div>
+      <h3 style="font-size:22px;font-weight:800;margin:12px 0 8px">今晚你值班</h3>
+      <p style="color:var(--tx2);font-size:14px;max-width:520px;margin:0 auto 22px">
+        告警源：SIEM / EDR / WAF / NDR / 邮件网关 / DLP / 蜜罐 / 威胁情报。<br>
+        真实威胁、误报、低价值噪音混在一起——像真的 SOC 一样。<br>
+        每条告警三步研判：<b style="color:var(--cy)">①定级 P1-P4 → ②定性（真实/误报/噪音）→ ③处置动作</b>
+      </p>
+      <div style="display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap;margin-bottom:22px">
+        <span style="color:var(--tx3);font-size:13px">班次时长</span>
+        <button class="chip on" data-dur="30">30 分钟（完整班次）</button>
+        <button class="chip" data-dur="15">15 分钟（快速班）</button>
+      </div>
+      <button class="btn btn-primary" id="startBtn" style="font-size:16px;padding:13px 34px">🕐 开始值班</button>
+      <p style="color:var(--tx3);font-size:12px;margin-top:16px">提示：SLA 初始 100，错误处置会扣分；每条告警限时 3 分钟内响应更稳。</p>
+    </div>
+
+    <!-- 值班控制台 -->
+    <div id="socConsole" style="display:none">
+      <div class="card soc-top">
+        <div class="sc-item"><b id="scClock">00:00</b><span>已值班</span></div>
+        <div class="sc-item"><b id="scRemain">--:--</b><span>距下班</span></div>
+        <div class="sc-item"><b id="scHandled">0</b><span>已处置</span></div>
+        <div class="sc-item"><b id="scScore">0</b><span>研判得分</span></div>
+        <div class="sc-item"><b id="scCombo">0</b><span>连对</span></div>
+        <div class="sc-sla">
+          <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--tx3);margin-bottom:4px"><span>SLA 服务水平</span><span id="scSlaTxt">100</span></div>
+          <span class="bar"><i id="scSlaBar" style="width:100%;background:linear-gradient(90deg,#34d399,#a3e635)"></i></span>
+        </div>
+      </div>
+
+      <div class="soc-grid">
+        <div class="card soc-feedwrap">
+          <h4 style="font-size:14px;font-weight:800">🛰️ 告警队列 <span style="font-size:11px;color:var(--tx3);font-family:var(--m)">最新在上</span></h4>
+          <div class="soc-feed" id="feed"></div>
+        </div>
+        <div class="card" id="triageWrap" style="min-height:420px"></div>
+      </div>
+    </div>
+
+    <!-- 班次报告 -->
+    <div id="socReport" style="display:none"></div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container f-bottom" style="border:none;margin-top:0;padding-top:0">
+    <span>🚨 SecOps Academy · SOC 值班室</span><span>告警内容基于真实 SOC 场景模拟</span>
+  </div>
+</footer>
+
+<script src="assets/js/progress.js"></script>
+<script src="assets/js/main.js"></script>
+<script src="assets/js/diff.js"></script>
+<script src="assets/js/soc.js"></script>
+</body>
+</html>
