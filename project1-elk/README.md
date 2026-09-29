@@ -52,7 +52,6 @@
 ```
 project1-elk/
 ├─ docker-compose.yml               # ELK 三件套编排
-├─ .env.example                     # 密钥模板（复制为 .env 后使用）
 ├─ logstash/
 │  └─ pipeline/logstash.conf        # 日志解析管道（多源分流 + 两层 Grok）
 ├─ kibana/
@@ -63,15 +62,16 @@ project1-elk/
    └─ INC-20260925-001-大量404请求.md  # 告警分析报告
 ```
 
+> **密钥不落盘**：`KIBANA_ENCRYPTION_KEY` 通过 `.env` 注入（见「快速开始」），
+> `.env` 已被 `.gitignore` 忽略，**不会进入版本库**。
+
 ---
 
 ## 快速开始
 
 ```bash
-# 1. 准备密钥（.env 已被 .gitignore 忽略，不会进版本库）
-cp .env.example .env
-#   编辑 .env，填入一个 32 字节随机十六进制串：
-#   KIBANA_ENCRYPTION_KEY=$(openssl rand -hex 32)
+# 1. 生成密钥并写入 .env（.env 已被 .gitignore 忽略，不会进版本库）
+echo "KIBANA_ENCRYPTION_KEY=$(openssl rand -hex 32)" > .env
 
 # 2. 启动（ES / Kibana 冷启动约 1~2 分钟）
 docker compose up -d
@@ -182,7 +182,7 @@ date { match => [ "timestamp", "dd/MMM/yyyy:HH:mm:ss Z" ] }
 | 2 | **`TZ=Asia/Shanghai` 静默失效** | 生成的数据时间偏 8 小时，"凌晨登录"变成上午 | 时区库不可用时会**静默回退到 UTC**。改用**不依赖时区库**的数值偏移：`date -u -d "$1 +0800"` |
 | 3 | **备份文件留在 pipeline 目录** | 解析**成功**的事件也全被打上 `_grokparsefailure` | Logstash 会读取目录下**所有文件**并**合并成同一个管道**（不是只读 `*.conf`）。`.bak` 里的旧配置与新配置**同时在跑**，各干各的 |
 | 4 | **`rm -f` 换 inode 不可靠** | 重建文件后重灌，只有零星几条新数据进入 | 文件系统会**复用 inode**，而 sincedb 按 inode 记进度 → 以为"已读过"，**只读文件尾部**。改用 `sincedb_path => "/dev/null"` 让每次重启都全量重读 |
-| 5 | **数据卷路径笔误 `/user/share`** | 改回 `/usr/share` 并重建容器后，**所有索引消失**（**实测确认**）| 应为 `/usr/share`。Docker 对不存在的挂载路径**不报错**，静默创建空目录 → ES 数据实际一直写在**容器可写层**里，容器一重建就全丢。**恢复**：因已配置 `sincedb_path => "/dev/null"`，重启 Logstash 后数据**自动全量重灌**，无需手工恢复 |
+| 5 | **数据卷路径笔误 `/user/share`** | 改回 `/usr/share` 并重建容器后，**索引全部消失**（**实测**）| 应为 `/usr/share`。Docker 对不存在的挂载路径**不报错**，静默创建空目录 → ES 数据实际一直写在**容器可写层**里，容器一重建就全丢。<br>**恢复**：因已配置 `sincedb_path => "/dev/null"`，重启 Logstash 即**自动全量重灌** —— 实测 5 个索引的文档数与原始**完全一致**（`weblogs-2017.01.10` 5280 / `weblogs-2017.01.11` 12055 / `weblogs-2026.09.14` 6 / `weblogs-2026.09.25` 280 / `ssh-auth-*` 48+398），**全程零手工操作** |
 | 6 | **阈值规则抓不住低速攻击** | 10 分钟只打 15 次的爆破**完全无告警** | `>100 次 / 5 分钟` 只能抓"快"的。攻击者把 280 次摊到 5 小时即可绕过。需改用**与速率无关的特征**，如**路径种类数（去重）** |
 
 > 🎯 **这 6 条全部属于「静默失败」** —— 不报错、日志干净、但结果是错的。
