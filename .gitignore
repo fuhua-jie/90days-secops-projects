@@ -1,1 +1,36 @@
-NUL 
+# ── AI / 工具运行时状态（不是代码，不要提交）──
+.mimosa/
+**/.mimosa/
+**/hook-state/
+**/hook-status/
+**/finding-ledger/
+.claude/
+.cursor/
+
+# ── 密钥与凭证（红线：绝不提交）──
+.env
+*.key
+*.pem
+id_rsa*
+secrets*
+*credentials*
+
+# ── 日志与压缩包 ──
+*.log
+*.gz
+*.zip
+*.tar
+*.tar.gz
+
+# ── 系统与编辑器 ──
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# ── 虚拟环境 ──
+venv/
+.venv/
+__pycache__/
+*.pyc
