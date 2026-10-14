@@ -4,13 +4,17 @@ services:
     container_name: elasticsearch
     environment:
       - discovery.type=single-node
-      - xpack.security.enabled=false
+      # ★ Day 51：开启认证 —— Elastic Security 的检测引擎必须先有「身份」
+      - xpack.security.enabled=true
+      # 超管 elastic 的初始密码（从 .env 读，不写明文进版本库）
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     ports:
       - "9200:9200"
     volumes:
       # 注意：容器路径必须是 /usr/share（不是 /user/share）
       - es_data:/usr/share/elasticsearch/data
+    restart: unless-stopped
 
   kibana:
     image: docker.elastic.co/kibana/kibana:8.11.0
@@ -19,10 +23,17 @@ services:
       - "5601:5601"
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      # ★ 开启认证后 Kibana 要用专用账号连 ES（最小权限：内置 kibana_system）
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - SERVER_PUBLICBASEURL=http://192.168.103.134:5601
+      - ELASTICSEARCH_PASSWORD=${KIBANA_SYSTEM_PASSWORD}
       # 密钥从 .env 读取（见 .env.example），不要写进版本库
       - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=${KIBANA_ENCRYPTION_KEY}
+      # 会话加密密钥：不设就每次重启随机生成（会把所有登录踢下线）
+      - XPACK_SECURITY_ENCRYPTIONKEY=${KIBANA_SECURITY_KEY}
     depends_on:
       - elasticsearch
+    restart: unless-stopped
 
   logstash:
     image: docker.elastic.co/logstash/logstash:8.11.0
@@ -30,12 +41,18 @@ services:
     volumes:
       - ./logstash/pipeline:/usr/share/logstash/pipeline
       - ./logs:/logs
-    ports:
-      - "5044:5044"
+    # ★ 刻意不写 ports：本方案用 file input 读挂载目录，不需要对外暴露 5044
+    #   （5044 是 beats 协议端口；file input 直接读文件系统，不经过网络）
     environment:
       - LS_JAVA_OPTS=-Xms256m -Xmx256m
+      # 采集账号：只给 ssh-auth-* 和 weblogs-* 的写权限（最小权限）
+      - ES_PWD=${LOGSTASH_INTERNAL_PASSWORD}
+      # 上报「Logstash 自身的监控指标」是另一种用途 → 用另一个身份（内置 logstash_system）
+      - XPACK_MONITORING_ELASTICSEARCH_USERNAME=logstash_system
+      - XPACK_MONITORING_ELASTICSEARCH_PASSWORD=${LOGSTASH_SYSTEM_PASSWORD}
     depends_on:
       - elasticsearch
+    restart: unless-stopped
 
 volumes:
   es_data:
