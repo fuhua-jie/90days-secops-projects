@@ -51,39 +51,64 @@
 
 ```
 project1-elk/
-├─ docker-compose.yml               # ELK 三件套编排
+├─ docker-compose.yml               # ELK 三件套编排（Day 51 起开启认证，密钥全部走 ${VAR} 占位符）
+├─ .env                             # 6 把密钥/密码（已被 .gitignore 忽略，不进版本库）
 ├─ logstash/
-│  └─ pipeline/logstash.conf        # 日志解析管道（多源分流 + 两层 Grok）
+│  └─ pipeline/logstash.conf        # 日志解析管道（多源分流 + 两层 Grok + Day 52 ECS 语义字段）
 ├─ kibana/
 │  └─ alert-rules.md                # 告警规则说明（含阈值盲区分析）
+├─ dashboards/
+│  └─ dashboards.ndjson             # 仪表盘导出物（9 个 saved objects，可跨环境导入）
+├─ docs/
+│  ├─ ELK搭建手册.md                # 从零搭建全流程 / 11 节 / 26 条坑 / 日常速查
+│  ├─ ELK复习笔记.md                # Day 44–52 全量复习（大白话名词词典 + 自测 10 题）
+│  └─ Day49-踩坑记录-日志接入.md     # 六格写法 + 坑 8–26 索引表
 ├─ scripts/
 │  └─ gen-auth.sh                   # 测试数据生成脚本（可复现）
 └─ reports/
-   └─ INC-20260925-001-大量404请求.md  # 告警分析报告
+   ├─ INC-20260925-001-大量404请求.md     # Day 48 告警分析报告
+   └─ INC-20260926-002-异常登录行为.md    # Day 49 告警分析报告（含检出率实测）
 ```
 
-> **密钥不落盘**：`KIBANA_ENCRYPTION_KEY` 通过 `.env` 注入（见「快速开始」），
-> `.env` 已被 `.gitignore` 忽略，**不会进入版本库**。
+> **密钥不落盘**：compose 里 6 个 `${VAR}` 全部从 `.env` 注入（见「快速开始」），
+> `.env` 已被 `.gitignore` 忽略，**不会进入版本库**。仓库里没有任何真实凭据。
 
 ---
 
 ## 快速开始
 
 ```bash
-# 1. 生成密钥并写入 .env（.env 已被 .gitignore 忽略，不会进版本库）
-echo "KIBANA_ENCRYPTION_KEY=$(openssl rand -hex 32)" > .env
+# 1. 一次性生成 6 把密钥/密码写入 .env（.env 已被 .gitignore 忽略，不会进版本库）
+for k in ELASTIC_PASSWORD KIBANA_SYSTEM_PASSWORD LOGSTASH_INTERNAL_PASSWORD LOGSTASH_SYSTEM_PASSWORD; do
+  printf '%s=%s\n' "$k" "$(openssl rand -hex 16)"
+done > .env
+for k in KIBANA_SECURITY_KEY KIBANA_ENCRYPTION_KEY; do
+  printf '%s=%s\n' "$k" "$(openssl rand -hex 32)"
+done >> .env
 
 # 2. 启动（ES / Kibana 冷启动约 1~2 分钟）
 docker compose up -d
 
-# 3. 验证
-curl localhost:9200/_cat/indices?v
-#   Kibana: http://localhost:5601
+# 3. 开认证后**必须**做的账号初始化，否则 Kibana 503 / Logstash 401
+EP=$(grep '^ELASTIC_PASSWORD=' .env | cut -d= -f2)
+KSP=$(grep '^KIBANA_SYSTEM_PASSWORD=' .env | cut -d= -f2)
+curl -u "elastic:$EP" -X POST localhost:9200/_security/user/kibana_system/_password \
+  -H 'Content-Type: application/json' -d "{\"password\":\"$KSP\"}"
+#   还要建「最小权限采集账号」logstash_internal（自定义角色 + 用户）+ 设 logstash_system 密码
+#   → 完整 4 条命令见 docs/ELK搭建手册.md §9「开启认证与 SIEM 检测」
+
+# 4. 验证（开认证后所有 curl 都要带 -u）
+docker compose config | grep -E 'ELASTIC_PASSWORD|ENCRYPTIONKEY'   # 先看 compose 渲染出了什么
+curl -u "elastic:$EP" localhost:9200/_cat/indices?v
+#   Kibana: http://localhost:5601   登录 elastic / $ELASTIC_PASSWORD
 ```
 
+> ⚠️ **6 个变量一个都不能少** —— 少任何一个，compose 会把它渲染成**空字符串**并**照常启动**：
+> ES 用空密码起来、Kibana 报 503 `unable to authenticate user [kibana_system]`、Logstash 静默 401 不入库。
+> 这是本项目踩过最狠的坑之一（手册 坑 15），**启动成功 ≠ 配置正确**。
 > ⚠️ **`XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY` 是必须的** ——
 > 缺少它时 Kibana Alerting 的 Connector 会报 500。
-> **改完 `.env` 后必须 `docker compose up -d kibana`**（只 `restart` 不会重载环境变量）。
+> **改完 `.env` 后必须 `docker compose up -d`**（只 `restart` 不会重载环境变量）。
 
 ---
 
