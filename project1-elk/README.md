@@ -214,5 +214,6 @@ date { match => [ "timestamp", "dd/MMM/yyyy:HH:mm:ss Z" ] }
 - [告警规则说明（kibana/alert-rules.md）](kibana/alert-rules.md) —— 两条规则的完整配置与**阈值盲区分析**
 - [**ELK 搭建手册**（docs/ELK搭建手册.md）](docs/ELK搭建手册.md) —— 862 行 / 11 节：环境与 compose → 管道设计 → **数据重灌 SOP** → Index Template → 验收判据 → 排错速查 → **26 条已知坑** → 日常操作 → 开启认证与 SIEM 检测 → **检测规则排查三层法**。写给自己三个月后的那本手册
 - [ELK 复习笔记（docs/ELK复习笔记.md）](docs/ELK复习笔记.md) —— Day 44–52 **大白话版**：全局图 / 名词词典（每个术语都带人话解释）/ 九天主线 / 坑速查表 / 重灌三问推导 / 运维命令小抄 / 自测 10 题
+- [Day 49 踩坑记录（docs/Day49-踩坑记录-日志接入.md）](docs/Day49-踩坑记录-日志接入.md) —— 踩坑笔记的**六格写法**（现象 / 我原来怎么想 / 实际是什么 / **怎么找到的** / 正确做法 / 一句话教训）+ 🔴静默 vs 🟡响亮 分类 + **26 条坑索引**
 - [仪表盘导出（dashboards/dashboards.ndjson）](dashboards/dashboards.ndjson) —— `SSH登录异常分析` 仪表盘 + 索引模式的 ndjson，可直接 `_api/saved_objects/_import` 还原（**已做过导出→删除→还原的闭环验证**）
 - [日志生成器（scripts/gen-auth.sh）](scripts/gen-auth.sh) —— 可控时间分布的 SSH 爆破样本生成脚本，用于**验证规则盲区**（把 280 次摊到 5 小时，看告警是否沉默）
