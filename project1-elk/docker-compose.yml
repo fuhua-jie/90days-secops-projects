@@ -25,7 +25,9 @@ services:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
       # ★ 开启认证后 Kibana 要用专用账号连 ES（最小权限：内置 kibana_system）
       - ELASTICSEARCH_USERNAME=kibana_system
-      - SERVER_PUBLICBASEURL=http://192.168.103.134:5601
+      # 对外可访问地址：告警 Action 里的 {{kibanaBaseUrl}} 就取这个值
+      # 实机地址放 .env 的 KIBANA_PUBLIC_URL（不写进版本库）；不设置时回落 localhost，开箱可跑
+      - SERVER_PUBLICBASEURL=${KIBANA_PUBLIC_URL:-http://localhost:5601}
       - ELASTICSEARCH_PASSWORD=${KIBANA_SYSTEM_PASSWORD}
       # 密钥从 .env 读取（见 .env.example），不要写进版本库
       - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=${KIBANA_ENCRYPTION_KEY}

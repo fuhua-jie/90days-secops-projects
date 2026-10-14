@@ -78,13 +78,16 @@ project1-elk/
 ## 快速开始
 
 ```bash
-# 1. 一次性生成 6 把密钥/密码写入 .env（.env 已被 .gitignore 忽略，不会进版本库）
+# 1. 一次性生成密钥/密码写入 .env（.env 已被 .gitignore 忽略，不会进版本库）
 for k in ELASTIC_PASSWORD KIBANA_SYSTEM_PASSWORD LOGSTASH_INTERNAL_PASSWORD LOGSTASH_SYSTEM_PASSWORD; do
   printf '%s=%s\n' "$k" "$(openssl rand -hex 16)"
 done > .env
 for k in KIBANA_SECURITY_KEY KIBANA_ENCRYPTION_KEY; do
   printf '%s=%s\n' "$k" "$(openssl rand -hex 32)"
 done >> .env
+# 告警 Action 里的 {{kibanaBaseUrl}} 取决于这个地址；只在本机浏览器访问就留 localhost，
+# 从别的机器访问 VM 就填 VM 的实际地址，例如 http://192.168.x.x:5601
+printf 'KIBANA_PUBLIC_URL=http://localhost:5601\n' >> .env
 
 # 2. 启动（ES / Kibana 冷启动约 1~2 分钟）
 docker compose up -d
@@ -103,7 +106,8 @@ curl -u "elastic:$EP" localhost:9200/_cat/indices?v
 #   Kibana: http://localhost:5601   登录 elastic / $ELASTIC_PASSWORD
 ```
 
-> ⚠️ **6 个变量一个都不能少** —— 少任何一个，compose 会把它渲染成**空字符串**并**照常启动**：
+> ⚠️ **6 把密钥一个都不能少**（`KIBANA_PUBLIC_URL` 可省，compose 里写了 `:-http://localhost:5601` 兜底）——
+> 少任何一个，compose 会把它渲染成**空字符串**并**照常启动**：
 > ES 用空密码起来、Kibana 报 503 `unable to authenticate user [kibana_system]`、Logstash 静默 401 不入库。
 > 这是本项目踩过最狠的坑之一（手册 坑 15），**启动成功 ≠ 配置正确**。
 > ⚠️ **`XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY` 是必须的** ——
